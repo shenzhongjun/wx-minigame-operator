@@ -1,0 +1,137 @@
+﻿# _wxcommon.ps1 - 公共库（体系重打磨 P1，2026-10-25）
+# 单一真相源：客户端尺寸、按钮模板区、窗口查找、尺寸断言、模板匹配。
+# 所有画面交互脚本 dot-source 本文件，禁止再在脚本内复制 P/Invoke 样板或区域常量。
+# 修改本文件 = 修改全部脚本的共同行为；改动后必须跑 wxregress-personal.ps1 离线回归。
+
+# ---- 配置区（定版常量，改动须用户确认并同步 coords-personal.md）----
+$WX_CLIENT_W = 1138                 # 客户区定版尺寸（2026-10-25 用户定版）
+$WX_CLIENT_H = 708
+$WX_WINDOW_TITLE = '勇士之心'        # 窗口标题匹配针
+$WX_BTN_X0 = 195; $WX_BTN_Y0 = 175  # 自动战斗按钮文字区（wxwhitebox 实测，1138x708 布局）
+$WX_BTN_X1 = 253; $WX_BTN_Y1 = 187
+$WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # 按钮点击点
+
+if (-not ('WXCommon' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class WXCommon {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern int GetWindowTextW(IntPtr h, StringBuilder sb, int max);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, UIntPtr e);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+  [DllImport("user32.dll")] public static extern bool AdjustWindowRect(ref RECT r, uint style, bool menu);
+  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int nIndex);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+  public static IntPtr Found = IntPtr.Zero;      // 标题匹配命中的窗口
+  public static IntPtr Fallback = IntPtr.Zero;   // pid 下第一个可见窗口（兜底）
+  public static int TargetPid = 0;
+  public static string Needle = "";
+  public static bool Cb(IntPtr h, IntPtr l) {
+    if (!IsWindowVisible(h)) return true;
+    uint pid; GetWindowThreadProcessId(h, out pid);
+    if ((int)pid != TargetPid) return true;
+    if (Found != IntPtr.Zero) return false;
+    StringBuilder sb = new StringBuilder(256);
+    GetWindowTextW(h, sb, 256);
+    string t = sb.ToString();
+    if (Needle.Length > 0 && t.Contains(Needle)) { Found = h; return false; }
+    if (Fallback == IntPtr.Zero) Fallback = h;
+    return true;
+  }
+}
+'@
+}
+if (-not ('System.Drawing.Bitmap' -as [type])) { Add-Type -AssemblyName System.Drawing }
+
+# ---- 窗口查找：Pid2>0 时在该进程内标题优先匹配；Pid2<=0 时按标题自动发现进程（P4 修复 wxshot 选错窗口 bug）----
+function Find-GameWindow {
+    param([int]$Pid2 = 0)
+    [WXCommon]::SetProcessDPIAware() | Out-Null
+    [WXCommon]::Found = [IntPtr]::Zero
+    [WXCommon]::Fallback = [IntPtr]::Zero
+    if ($Pid2 -gt 0) {
+        $proc = Get-Process -Id $Pid2 -ErrorAction SilentlyContinue
+        if (-not $proc) { return [IntPtr]::Zero }
+        [WXCommon]::TargetPid = $Pid2
+        [WXCommon]::Needle = $WX_WINDOW_TITLE
+    } else {
+        $proc = Get-Process WeChatAppEx -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowTitle -like "*$WX_WINDOW_TITLE*" } | Select-Object -First 1
+        if (-not $proc) { return [IntPtr]::Zero }
+        [WXCommon]::TargetPid = $proc.Id
+        [WXCommon]::Needle = $proc.MainWindowTitle
+    }
+    [WXCommon]::EnumWindows([WXCommon+EnumProc]{ param($h,$l) [WXCommon]::Cb($h,$l) }, [IntPtr]::Zero) | Out-Null
+    if ([WXCommon]::Found -ne [IntPtr]::Zero) { return [WXCommon]::Found }
+    return [WXCommon]::Fallback
+}
+
+# ---- 客户区几何：读尺寸+原点；默认断言 ±2px 容差（1136-1140×706-710），诊断用途传 -NoAssert ----
+# 容差依据（2026-10-25 晚实测 3/3）：「再来一次」进图转换会确定性触发 WeChatAppEx 重申记忆几何
+# （1138→1139），模板 dist 双 0、导航断言、点击热区在两个宽度下均正常——1px 级不构成布局重排
+# （事件19 的 8px 教训不适用于此量级）。超 ±2px 仍停机；复位用 wxresize-personal.ps1。
+function Get-ClientGeometry {
+    param([IntPtr]$h, [switch]$NoAssert)
+    $cr = New-Object WXCommon+RECT; [WXCommon]::GetClientRect($h, [ref]$cr) | Out-Null
+    $pt = New-Object WXCommon+POINT; $pt.X = 0; $pt.Y = 0; [WXCommon]::ClientToScreen($h, [ref]$pt) | Out-Null
+    if (-not $NoAssert -and ([math]::Abs($cr.R - $WX_CLIENT_W) -gt 2 -or [math]::Abs($cr.B - $WX_CLIENT_H) -gt 2)) {
+        Write-Output "ERR: client=$($cr.R)x$($cr.B) 与定版尺寸 $($WX_CLIENT_W)x$($WX_CLIENT_H) 偏差超 ±2px，停机请用户核对窗口尺寸（可先试 wxresize-personal.ps1 复位）"
+        exit 8
+    }
+    [pscustomobject]@{ W = $cr.R; H = $cr.B; OX = $pt.X; OY = $pt.Y }
+}
+
+# ---- 资产目录（包内相对定位，禁止绝对路径）----
+function Get-WxAssetsDir { Join-Path (Split-Path -Parent $PSScriptRoot) 'assets' }
+
+# ---- 自动战斗按钮模板匹配（唯一判据=按钮文字；与血量/tip/底色零关系）----
+function Get-WxBmpMask([System.Drawing.Bitmap]$b, [int]$ox, [int]$oy) {
+    $w = $WX_BTN_X1 - $WX_BTN_X0 + 1; $h = $WX_BTN_Y1 - $WX_BTN_Y0 + 1
+    $m = New-Object bool[] ($w * $h)
+    for ($y = 0; $y -lt $h; $y++) { for ($x = 0; $x -lt $w; $x++) {
+        $c = $b.GetPixel($ox + $x, $oy + $y)
+        if ($c.R -gt 170 -and $c.G -gt 170 -and $c.B -gt 170) { $m[$y * $w + $x] = $true }
+    } }
+    return $m
+}
+function Get-WxJaccard($a, $b) {
+    $inter = 0; $uni = 0
+    for ($i = 0; $i -lt $a.Count; $i++) {
+        if ($a[$i] -or $b[$i]) { $uni++ }
+        if ($a[$i] -and $b[$i]) { $inter++ }
+    }
+    if ($uni -eq 0) { return 1.0 }
+    return 1.0 - ($inter / $uni)
+}
+function Import-WxBtnTemplates {
+    $a = Get-WxAssetsDir
+    @{
+        Off = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_off.png") 0 0
+        On  = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_on.png") 0 0
+    }
+}
+# 判定：返回 'ON'/'OFF'/'UNKNOWN'（距离≤0.60 且交叉差≥0.10 才定论，宁可不知不可误判）
+function Get-WxBtnState([System.Drawing.Bitmap]$b, [int]$ox, [int]$oy, $tplOff, $tplOn) {
+    $live = Get-WxBmpMask $b $ox $oy
+    $dOn = Get-WxJaccard $live $tplOn
+    $dOff = Get-WxJaccard $live $tplOff
+    if (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10)) { return 'ON' }
+    if (($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)) { return 'OFF' }
+    return 'UNKNOWN'
+}

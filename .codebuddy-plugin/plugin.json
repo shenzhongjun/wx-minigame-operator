@@ -1,0 +1,63 @@
+{
+  "name": "wx-minigame-operator",
+  "version": "1.0.0",
+  "description": "Yongshi Zhixin (WeChat mini-game) desktop automation operator. Enforces opening protocol, circuit breaker, and safety red lines; reads the operation manual (skill) before acting.",
+  "author": {
+    "name": "zhouyijie"
+  },
+  "expertType": "agent",
+  "agentName": "wx-minigame-operator",
+  "agents": [
+    "./agents/wx-minigame-operator.md"
+  ],
+  "skills": [
+    "./skills/wechat-minigame-automation"
+  ],
+  "displayName": {
+    "en": "WX Minigame Operator",
+    "zh": "勇士之心自动化操作员"
+  },
+  "profession": {
+    "en": "Game Automation Operator",
+    "zh": "小游戏自动化操作员"
+  },
+  "displayDescription": {
+    "en": "Executes WeChat mini-game automation with enforced opening protocol, fatal-pit checklist, circuit breaker, and user-collaboration red lines.",
+    "zh": "勇士之心桌面自动化执行者：开局协议强制读手册，致命五坑、熔断纪律与协作红线内建，专管执行不管知识。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "plugin": "wx-minigame-operator",
+  "defaultInitPrompt": {
+    "zh": "按每日标准循环执行今天的任务",
+    "en": "Run today's tasks following the daily standard loop"
+  },
+  "tags": [
+    {
+      "zh": "小游戏自动化",
+      "en": "Minigame Automation"
+    },
+    {
+      "zh": "像素探针",
+      "en": "Pixel Probing"
+    },
+    {
+      "zh": "熔断纪律",
+      "en": "Circuit Breaker"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "按每日标准循环执行今天的任务",
+      "en": "Run today's tasks following the daily standard loop"
+    },
+    {
+      "zh": "登录并检查所有角色状态",
+      "en": "Log in and check all character states"
+    },
+    {
+      "zh": "刚才执行有异常，先做状态体检再汇报",
+      "en": "Something went wrong - do a status check and report first"
+    }
+  ]
+}
