@@ -5,6 +5,7 @@
 # 前提：两张实拍截图（-ImgOff 按钮为「自动战斗」关态 / -ImgOn 为「取消自动」开态），完整客户区 PNG；
 #       非设计尺寸会自动最近邻归一化到 1138x708，模板始终落在设计坐标系
 # 安全：任何一步失败自动回滚（模板与 _wxcommon 均先备份）；完成后必须跑 wxregress-personal.ps1 全过才算交付
+# ⚠️ 2026-10-26 用户裁定：wxregress 清单 AI 标注待人工核验，暂停使用——本流程末步回归以实机探针+截图目验替代。
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 $ErrorActionPreference = 'Stop'
 if ($ImgOff -eq "" -or $ImgOn -eq "" -or -not (Test-Path $ImgOff) -or -not (Test-Path $ImgOn)) {
@@ -104,7 +105,7 @@ $offOk = ($offStr -match 'BTN_STATE=OFF') -and ($offStr -match 'dist_off=0')
 $onOk  = ($onStr -match 'BTN_STATE=ON') -and ($onStr -match 'dist_on=0')
 if ($offOk -and $onOk) {
     "RECROP_OK: 模板+常量已更新并验证通过。收尾三件事："
-    "  1. 跑 wxregress-personal.ps1 全量回归（必须全过）"
+    "  1. 跑 wxregress-personal.ps1 全量回归（必须全过）⚠️ 已暂停：清单 AI 标注待人工核验，暂以实机探针+截图目验替代"
     "  2. 更新 coords-personal.md 按钮判定源登记（新文字区 $x0,$y0-$x1,$y1）"
     "  3. 相对坐标体系下无需同步窗口尺寸；仅当设计基准本身变更时才改 WX_DESIGN_W/H"
     exit 0

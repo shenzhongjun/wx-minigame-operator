@@ -98,14 +98,14 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxclaim-personal.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke-personal.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate-personal.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocrbtn OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
-| `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress |
-| `wxregress-personal.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，全过才算改动成立 | `-Manifest -ImgDir` |
+| `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
+| `wxregress-personal.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox-personal.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin-personal.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
 | `wxpopup-personal.ps1` | **弹窗分类器**：挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/无/未知(红线停)，金确定钮守卫+正文模板 | `-Pid2 -Img` |
 | `wxstam-personal.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
 | `wxresize-personal.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
-| `wxrecrop-personal.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress | `-ImgOff -ImgOn` |
+| `wxrecrop-personal.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
 | `wxnav-tower-personal.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
 | `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxocrbtn-personal` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/OCR 按钮文字二次意见（Windows 自带 zh-Hans 引擎，仅判定「自动战斗/取消自动」） | 见脚本头 |
 | `wxfarm-personal.ps1` | 旧版扫描循环，**已被 wxgrind 替代，仅存档** | — |
