@@ -47,6 +47,27 @@ foreach ($f in ($required | Where-Object { $_ -like '*.md' })) {
   }
 }
 
+Write-Host ''
+Write-Host '--- live 几何审计（窗口已开时；wxcanvas 实测 chrome vs 常量）---'
+$canvasOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $base 'scripts\wxcanvas.ps1') 2>&1
+$canvasJoined = ($canvasOut | ForEach-Object { "$_" }) -join "`n"
+if ($canvasJoined -match 'window not found') {
+  Write-Host '[SKIP] 游戏窗口未开，跳过 chrome 审计（开局开窗后请补跑 wxcanvas.ps1）'
+} elseif ($canvasJoined -match 'chrome=(\d+)') {
+  $chromeLive = [int]$Matches[1]
+  $chromeExpect = 55
+  $commonRaw = Get-Content (Join-Path $base 'scripts\_wxcommon.ps1') -Raw -Encoding UTF8
+  if ($commonRaw -match '\$WX_CHROME_H\s*=\s*(\d+)') { $chromeExpect = [int]$Matches[1] }
+  if ($chromeLive -eq $chromeExpect) {
+    Write-Host "[OK  ] chrome=$chromeLive 与 _wxcommon 常量一致（客户区结构未变）"
+  } else {
+    Write-Host "[FAIL] chrome 实测=$chromeLive 常量=$chromeExpect 不一致！几何换算将整体偏移，禁止开工。核实后更新 _wxcommon.ps1 的 WX_CHROME_H" -ForegroundColor Red
+    exit 1
+  }
+} else {
+  Write-Host "[WARN] wxcanvas 输出异常，chrome 未定（首行：$($canvasJoined.Split("`n")[0]))"
+}
+
 if ($missing.Count -gt 0) {
   Write-Host "预检失败：缺失 $($missing.Count) 个文件，禁止开工：" -ForegroundColor Red
   $missing | ForEach-Object { Write-Host "  - $_" }

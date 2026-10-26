@@ -14,6 +14,11 @@ $WX_WINDOW_TITLE = '勇士之心'        # 窗口标题匹配针
 $WX_BTN_X0 = 195; $WX_BTN_Y0 = 175  # 自动战斗按钮文字区（wxwhitebox 实测，设计坐标）
 $WX_BTN_X1 = 253; $WX_BTN_Y1 = 187
 $WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # 按钮点击点（设计坐标）
+# 微信小游戏内嵌标题栏（客户区顶部白条「勇士之心」+胶囊按钮）：固定高度，不随窗口缩放。
+# 2026-10-26 wxcanvas.ps1 实测两尺寸（650x431 / 1967x1192）chrome 均=55px 坐实。
+# 设计基准 1138x708 的 0-54 行即此标题栏；游戏画布=设计 55-707 行（653px 高，等比缩放）。
+# 审计工具：wxcanvas.ps1（chrome/bars 实测，与常量不符时更新本值）。
+$WX_CHROME_H = 55
 
 if (-not ('WXCommon' -as [type])) {
 Add-Type -TypeDefinition @'
@@ -87,41 +92,39 @@ function Find-GameWindow {
 }
 
 # ---- 客户区几何：读尺寸+原点，并给出设计坐标→屏幕的换算参数 ----
-# 设计基准 1138x708；游戏布局严格等比（用户 2026-10-26 确认）。换副本时客户区会有 1-3px 级变化，
-# 由 S（统一缩放）与 OFFX/OFFY（居中留边）吸收，不再要求精确复位。
-# 仅当长宽比偏差 >1.2% 或缩放越界时停机（防窗口异常/非等比拉伸）；维护工具传 -Exact 要求精确定版。
+# 设计基准 1138x708（含 55px 内嵌标题栏，游戏画布=设计 55-707 行）。客户区结构：
+#   [标题栏 固定 55px 不缩放] + [游戏画布 等比缩放]（2026-10-26 wxcanvas.ps1 两尺寸实测坐实）
+# 换算：S = min(W/1138, (H-55)/653)；纵向 screen_y = OY + 55 + (design_y-55)*S；横向居中留边。
+# 基准 1138x708 时 S=1，与旧全客户区模型重合，已验证坐标零失效。任意窗口尺寸（含非等比/缩小窗）可换算。
 function Get-ClientGeometry {
     param([IntPtr]$h, [switch]$NoAssert, [switch]$Exact)
     $cr = New-Object WXCommon+RECT; [WXCommon]::GetClientRect($h, [ref]$cr) | Out-Null
     $pt = New-Object WXCommon+POINT; $pt.X = 0; $pt.Y = 0; [WXCommon]::ClientToScreen($h, [ref]$pt) | Out-Null
-    $sx = $cr.R / $WX_DESIGN_W
-    $sy = $cr.B / $WX_DESIGN_H
+    $W = $cr.R; $H = $cr.B; $ch = $WX_CHROME_H
+    $sx = $W / $WX_DESIGN_W
+    $sy = ($H - $ch) / ($WX_DESIGN_H - $ch)
     $s = [math]::Min($sx, $sy)
     if (-not $NoAssert) {
-        if ($Exact -and ($cr.R -ne $WX_DESIGN_W -or $cr.B -ne $WX_DESIGN_H)) {
-            Write-Output "ERR: client=$($cr.R)x$($cr.B) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize.ps1）"
+        if ($Exact -and ($W -ne $WX_DESIGN_W -or $H -ne $WX_DESIGN_H)) {
+            Write-Output "ERR: client=$($W)x$($H) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize.ps1）"
             exit 8
         }
-        if ([math]::Abs($sx - $sy) -gt 0.012) {
-            Write-Output "ERR: client=$($cr.R)x$($cr.B) 长宽比与设计基准偏差过大，停机请用户核对窗口"
-            exit 8
-        }
-        if ($s -lt 0.75 -or $s -gt 2.0) {
-            Write-Output "ERR: client=$($cr.R)x$($cr.B) 缩放系数 $([math]::Round($s,3)) 超出 0.75-2.0，停机请用户核对窗口"
+        if ($s -lt 0.40 -or $s -gt 2.0) {
+            Write-Output "ERR: client=$($W)x$($H) 缩放系数 $([math]::Round($s,3)) 超出 0.40-2.0，停机请用户核对窗口"
             exit 8
         }
     }
-    $offX = ($cr.R - $WX_DESIGN_W * $s) / 2
-    $offY = ($cr.B - $WX_DESIGN_H * $s) / 2
-    [pscustomobject]@{ W = $cr.R; H = $cr.B; OX = $pt.X; OY = $pt.Y; S = $s; SX = $sx; SY = $sy; OFFX = $offX; OFFY = $offY }
+    $offX = ($W - $WX_DESIGN_W * $s) / 2
+    [pscustomobject]@{ W = $W; H = $H; OX = $pt.X; OY = $pt.Y; S = $s; SX = $sx; SY = $sy; OFFX = $offX; OFFY = $ch; CHROME = $ch }
 }
 
 # ---- 设计坐标 → 屏幕坐标（点击/采样前调用）----
+# 纵向：设计 0-54 行=标题栏（固定 55px 不缩放），画布行自设计 55 起以 S 缩放
 function ConvertTo-ScreenPoint {
     param($g, [int]$x, [int]$y)
     [pscustomobject]@{
         X = [int][math]::Round($g.OX + $g.OFFX + $x * $g.S)
-        Y = [int][math]::Round($g.OY + $g.OFFY + $y * $g.S)
+        Y = [int][math]::Round($g.OY + $g.OFFY + ($y - $g.OFFY) * $g.S)
     }
 }
 
@@ -130,7 +133,7 @@ function ConvertFrom-ScreenPoint {
     param($g, [int]$x, [int]$y)
     [pscustomobject]@{
         X = [int][math]::Round(($x - $g.OX - $g.OFFX) / $g.S)
-        Y = [int][math]::Round(($y - $g.OY - $g.OFFY) / $g.S)
+        Y = [int][math]::Round($g.OFFY + ($y - $g.OY - $g.OFFY) / $g.S)
     }
 }
 
@@ -148,30 +151,39 @@ function Resize-WxBitmapNearest {
 }
 
 # ---- 实时抓图并归一化回设计尺寸：后续像素判定/模板匹配零改动 ----
+# 只抓游戏画布区（客户区去掉 55px 标题栏），归一化到 1138x653 后贴回 1138x708 画布、
+# 顶部 0-54 行填白（模拟标题栏）——输出即标准设计坐标位图，所有区域常量零改动。
+# -Raw 保留画布实时尺寸（诊断缩放用；不含标题栏）。
 function Get-DesignBitmap {
     param($g, [switch]$Raw)
     $vw = [int][math]::Round($WX_DESIGN_W * $g.S)
-    $vh = [int][math]::Round($WX_DESIGN_H * $g.S)
+    $vh = [int][math]::Round(($WX_DESIGN_H - $g.OFFY) * $g.S)
     $cx = [int][math]::Round($g.OFFX)
-    $cy = [int][math]::Round($g.OFFY)
     $src = New-Object System.Drawing.Bitmap $vw, $vh
     $gr = [System.Drawing.Graphics]::FromImage($src)
-    $gr.CopyFromScreen($g.OX + $cx, $g.OY + $cy, 0, 0, (New-Object System.Drawing.Size $vw, $vh))
+    $gr.CopyFromScreen($g.OX + $cx, $g.OY + $g.OFFY, 0, 0, (New-Object System.Drawing.Size $vw, $vh))
     $gr.Dispose()
     if ($Raw) { return $src }
-    $dst = Resize-WxBitmapNearest $src $WX_DESIGN_W $WX_DESIGN_H
-    if (-not [object]::ReferenceEquals($dst, $src)) { $src.Dispose() }
+    $canvas = Resize-WxBitmapNearest $src $WX_DESIGN_W ($WX_DESIGN_H - $g.OFFY)
+    if (-not [object]::ReferenceEquals($canvas, $src)) { $src.Dispose() }
+    $dst = New-Object System.Drawing.Bitmap $WX_DESIGN_W, $WX_DESIGN_H
+    $g2 = [System.Drawing.Graphics]::FromImage($dst)
+    $g2.Clear([System.Drawing.Color]::White)
+    $g2.DrawImage($canvas, 0, $g.OFFY)
+    $g2.Dispose()
+    if (-not [object]::ReferenceEquals($canvas, $dst)) { $canvas.Dispose() }
     return $dst
 }
 
 # ---- 抓取设计坐标区域并归一化到该区域设计尺寸（自动战斗按钮等小区域用）----
+# 纵向按画布映射：screen_y = OY + 标题栏 + (design_y-55)*S（区域恒在设计 55 行以下，无需白边处理）
 function Get-DesignRegion {
     param($g, [int]$x0, [int]$y0, [int]$x1, [int]$y1)
     $dw = $x1 - $x0 + 1; $dh = $y1 - $y0 + 1
     $sw = [math]::Max(1, [int][math]::Round($dw * $g.S))
     $sh = [math]::Max(1, [int][math]::Round($dh * $g.S))
     $sx = [int][math]::Round($g.OFFX + $x0 * $g.S)
-    $sy = [int][math]::Round($g.OFFY + $y0 * $g.S)
+    $sy = [int][math]::Round($g.OFFY + ($y0 - $g.OFFY) * $g.S)
     $src = New-Object System.Drawing.Bitmap $sw, $sh
     $gr = [System.Drawing.Graphics]::FromImage($src)
     $gr.CopyFromScreen($g.OX + $sx, $g.OY + $sy, 0, 0, (New-Object System.Drawing.Size $sw, $sh))
