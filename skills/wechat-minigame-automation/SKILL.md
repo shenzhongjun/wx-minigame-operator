@@ -108,8 +108,8 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxrecrop-personal.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
 | `wxnav-tower-personal.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
 | `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxocrbtn-personal` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/OCR 按钮文字二次意见（Windows 自带 zh-Hans 引擎，仅判定「自动战斗/取消自动」） | 见脚本头 |
-| `wxfarm-personal.ps1` | 旧版扫描循环，**已被 wxgrind 替代，仅存档** | — |
 | `wxclick.ps1`/`wxfarm.ps1`/`wxwait` | 公司电脑/Trae 遗产存档 | — |
+| ~~`wxfarm-personal.ps1`~~ | **已删除（2026-10-26 用户裁决）**：未迁移设计坐标体系（裸屏幕数学，窗口≠1138×708 必错位），且功能已被 wxgrind -AutoRetry 覆盖 | — |
 
 探针状态动作：`GOLD_DIALOG`→按专家红线处理；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`LOGIN_PAGE`→点 (571,527)；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`UNKNOWN`→人工截图。
 

@@ -29,8 +29,8 @@
 
 ## 待办（优先级序，2026-10-25 深夜清账）
 
-1. **wxfarm 失灵悬案**：RGB 解剖证明旧判定式吻合圣殿按钮 → 失灵原因未知（怀疑奖励弹窗遮挡），下次遇到当场截图存证；短期直接用 wxgrind 固定坐标方案
-2. **wxfarm 复活处理**：死亡→金弹窗检测（wxprobe GOLD_DIALOG→wxpopup 分类→点(700,513)）→ wxgrind 加 -Revive 开关
+1. **wxrecrop 未同步 wxocrbtn OCR 区（2026-10-26 审查发现）**：wxocrbtn 四字区 (184,169)-(272,193) 写死在脚本内，wxrecrop 重裁只更新 _wxcommon 按钮区常量——未来真触发重裁后 OCR 兜底区会漂移失配；且该区未登记进 coords-personal.md。修法：wxrecrop 增加同步逻辑 + coords-personal.md 登记
+2. **死亡复活处理**：死亡→金弹窗检测（wxprobe GOLD_DIALOG→wxpopup 分类→点(700,513)）→ wxgrind 加 -Revive 开关（原「wxfarm 复活处理」，wxfarm 已删，能力诉求保留）
 3. **前台守卫**：wxprobe/wxshot 加 FOREGROUND_LOST（GetForegroundWindow≠游戏时报错），防用户切窗后读假数据（2026-10-25 网盘页遮挡实锤）
 4. **冥渊选图页缺坐标**：森之魔域-3（上排第3卡）、冥渊入口-6（下排第1卡）待标定
 5. **P6 坐标配置单源化收尾**：_wxcommon config 区已具雏形，差关键点击坐标迁入 + preflight 一致性校验
@@ -57,4 +57,5 @@
 - 「冥渊节点连点两次」：单击即可（事件12）
 - 「炎之魔域-3 点名字区」：作废，卡片中心 (585,264)
 - 「wxfarm 通用红带扫描作为圣殿结算方案」：被 wxgrind 固定坐标方案替代
+- 「wxfarm 失灵悬案」：随 wxfarm-personal 删除作废（2026-10-26 用户裁决：未迁移设计坐标+功能被 wxgrind -AutoRetry 覆盖）
 - trae-exec-helpers.js / portability.md / 公司机脚本：Trae 遗产，仅存档

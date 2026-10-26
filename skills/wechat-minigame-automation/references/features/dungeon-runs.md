@@ -2,7 +2,7 @@
 
 > **目的**：用户说「刷深渊/冥渊」「刷圣殿」「刷航路」及每日标准循环的执行环节。
 > **触发**：任务指令含对应副本关键词；循环定义见 `game-mechanics.md`。
-> **脚本**：wxclick / wxgrind / wxprobe（用法见 SKILL.md 清单；wxfarm 已存档，不再使用）。
+> **脚本**：wxclick / wxgrind / wxprobe（用法见 SKILL.md 清单；wxfarm 已删除——未迁移设计坐标且被 wxgrind 覆盖，2026-10-26 用户裁决）。
 > **坐标**：引自 `coords-personal.md` 通用坐标表（表为标定权威源，此处为执行引用值；全部是设计坐标 1138×708，脚本自动换算）。
 > **机制数值**（体力/邀请函/免费首把/刷新时间）：见 `game-mechanics.md`，本文件不重复。
 

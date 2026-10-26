@@ -210,12 +210,3 @@ function Import-WxBtnTemplates {
         On  = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_on.png") 0 0
     }
 }
-# 判定：返回 'ON'/'OFF'/'UNKNOWN'（距离≤0.60 且交叉差≥0.10 才定论，宁可不知不可误判）
-function Get-WxBtnState([System.Drawing.Bitmap]$b, [int]$ox, [int]$oy, $tplOff, $tplOn) {
-    $live = Get-WxBmpMask $b $ox $oy
-    $dOn = Get-WxJaccard $live $tplOn
-    $dOff = Get-WxJaccard $live $tplOff
-    if (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10)) { return 'ON' }
-    if (($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)) { return 'OFF' }
-    return 'UNKNOWN'
-}

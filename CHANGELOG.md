@@ -4,6 +4,20 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.0 --stat`（两版间文件差异）。
 
+## [1.1.1] - 2026-10-26
+
+**主题：v1.1.0 代码审查清理——wxfarm 退役 + 死代码删除**
+
+### 移除
+- **`wxfarm-personal.ps1` 删除（用户裁决）**：未迁移设计坐标体系（FindBtnY/DoClick/Ensure-Auto 三处裸屏幕数学，窗口≠1138×708 必错位），且扫描能力已被 wxgrind -AutoRetry 归一化版覆盖。「wxfarm 失灵悬案」随之作废。
+- `_wxcommon.ps1` 删除 `Get-WxBtnState` 死代码（零调用者；判定逻辑实际由 wxprobe/wxautostate/wxclick 各自内联）。
+
+### 文档
+- tasks.md 存档本次审查任务与用户裁决；todo-scripts.md 新增「wxrecrop 未同步 wxocrbtn OCR 区」待办（挂账）；SKILL.md/dungeon-runs.md 同步 wxfarm 状态。
+
+### 审查结论（2026-10-26）
+- 主链 12 脚本（wxprobe/wxclick/wxgrind/wxpopup/wxstam/wxlogin/wxpoke/wxscroll/wxshot/wxautostate/wxrecrop/wxnav）设计坐标换算一致，无运行 bug；wxlogin 零命中=正常（坐标全走 wxclick/wxprobe 换算）。
+
 ## [1.1.0] - 2026-10-26
 
 **主题：设计坐标体系（相对坐标）+ OCR 识别补充**
