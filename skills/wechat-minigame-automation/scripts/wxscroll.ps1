@@ -1,5 +1,5 @@
 ﻿param([int]$Pid2 = 0, [int]$X = 570, [int]$Y = 400, [int]$Notches = -3)
-# 个人电脑版滚轮滚动（设计坐标，基准 1138x708）
+# 滚轮滚动（设计坐标，基准 1138x708）
 # -Notches 负数=向下滚，正数=向上滚（一格=120）
 # 窗口查找/尺寸断言由 _wxcommon.ps1 单源提供；pid 0=按标题自动发现
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')

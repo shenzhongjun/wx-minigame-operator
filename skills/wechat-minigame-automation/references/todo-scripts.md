@@ -24,12 +24,12 @@
 ## 挂机弹窗间隙优化（用户问询复盘，见对话）
 
 - 弹窗出现的间隙：①wxgrind 批次异常停止→诊断+写工具（文档遮挡事件，~8 分钟）；②批次正常结束→探针对账+汇报（~3-5 分钟）；③等用户指令（~50 分钟，不可控）
-- [x] **轮盘保活方案落地（用户方案，替代"自动恢复链"）**：wxpoke-personal.ps1 = 按下→拖动→拖回→松开（mouse_event 三段），轮盘中心 (210,558) 半径70 实测标定；wxgrind 120s 节流戳（Invoke-PokeIfDue，用户定版：120s 一戳足够避开挂机弹窗；用户在玩时戳一下也无妨，无需探测）；前台守卫同 wxclick。实测拖拽生效 ✓
+- [x] **轮盘保活方案落地（用户方案，替代"自动恢复链"）**：wxpoke.ps1 = 按下→拖动→拖回→松开（mouse_event 三段），轮盘中心 (210,558) 半径70 实测标定；wxgrind 120s 节流戳（Invoke-PokeIfDue，用户定版：120s 一戳足够避开挂机弹窗；用户在玩时戳一下也无妨，无需探测）；前台守卫同 wxclick。实测拖拽生效 ✓
 - [x] wxgrind 大批量用 run_in_background 突破 600s 限制（2026-10-25 全晚常态化）
 
 ## 待办（优先级序，2026-10-25 深夜清账）
 
-1. **wxrecrop 未同步 wxocrbtn OCR 区（2026-10-26 审查发现）**：wxocrbtn 四字区 (184,169)-(272,193) 写死在脚本内，wxrecrop 重裁只更新 _wxcommon 按钮区常量——未来真触发重裁后 OCR 兜底区会漂移失配；且该区未登记进 coords-personal.md。修法：wxrecrop 增加同步逻辑 + coords-personal.md 登记
+1. **wxrecrop 未同步 wxocrbtn OCR 区（2026-10-26 审查发现）**：wxocrbtn 四字区 (184,169)-(272,193) 写死在脚本内，wxrecrop 重裁只更新 _wxcommon 按钮区常量——未来真触发重裁后 OCR 兜底区会漂移失配；且该区未登记进 coords.md。修法：wxrecrop 增加同步逻辑 + coords.md 登记
 2. **死亡复活处理**：死亡→金弹窗检测（wxprobe GOLD_DIALOG→wxpopup 分类→点(700,513)）→ wxgrind 加 -Revive 开关（原「wxfarm 复活处理」，wxfarm 已删，能力诉求保留）
 3. **前台守卫**：wxprobe/wxshot 加 FOREGROUND_LOST（GetForegroundWindow≠游戏时报错），防用户切窗后读假数据（2026-10-25 网盘页遮挡实锤）
 4. **冥渊选图页缺坐标**：森之魔域-3（上排第3卡）、冥渊入口-6（下排第1卡）待标定
@@ -49,7 +49,7 @@
 
 ## 废弃标记（别重建）
 
-- wxauto-personal.ps1（常驻守护）：用户否决（占资源），已删除
+- wxauto.ps1（常驻守护）：用户否决（占资源），已删除
 - 「进图后起一次性脚本检测」：进程启动+编译3~4s，超时
 - 「血条像素当判定条件」：已全删（自动战斗与血量零关系）
 - 「白字 tip 作自动战斗判定」：已彻底删除（2026-10-25 用户令：唯一判据=按钮文字；此前降级保留的"已开启旁证+点击否决器"也一并删除——52 噪声白像素曾放行站桩死复盘）
@@ -57,5 +57,5 @@
 - 「冥渊节点连点两次」：单击即可（事件12）
 - 「炎之魔域-3 点名字区」：作废，卡片中心 (585,264)
 - 「wxfarm 通用红带扫描作为圣殿结算方案」：被 wxgrind 固定坐标方案替代
-- 「wxfarm 失灵悬案」：随 wxfarm-personal 删除作废（2026-10-26 用户裁决：未迁移设计坐标+功能被 wxgrind -AutoRetry 覆盖）
-- trae-exec-helpers.js / portability.md / 公司机脚本：Trae 遗产，仅存档
+- 「wxfarm 失灵悬案」：随 wxfarm 删除作废（2026-10-26 用户裁决：未迁移设计坐标+功能被 wxgrind -AutoRetry 覆盖）
+- 公司机代码（wxclick.ps1/wxfarm.ps1 旧版、coords-company.md、trae-exec-helpers.js、portability.md）：2026-10-26 用户令已删除，双机支持废止，仅本机

@@ -1,5 +1,5 @@
 ﻿param([string]$Manifest = "", [string]$ImgDir = "C:\Users\zhouyijie\WorkBuddy\游戏\wx-verify")
-# wxregress-personal.ps1 - 离线回归测试（体系重打磨 P2，2026-10-25）
+# wxregress.ps1 - 离线回归测试（体系重打磨 P2，2026-10-25）
 # ⚠️ 2026-10-26 用户裁定：清单 _regress-manifest.csv 系 AI 标注未经人工核验（含命名/断言矛盾行、UNKNOWN 误报锁定行），
 #    本回归体系【暂停使用】；恢复前脚本改动验证以实机探针+截图目验替代，本脚本输出不作为改动门槛。
 # 用途：对标注截图批量断言 wxautostate BTN_STATE 与 wxprobe STATE（-Img 离线模式）。
@@ -11,8 +11,8 @@
 # 退出码：0=全过；1=有 FAIL 或清单/图片缺失。
 $ErrorActionPreference = 'Stop'
 if ($Manifest -eq "") { $Manifest = Join-Path $PSScriptRoot '_regress-manifest.csv' }
-$autostate = Join-Path $PSScriptRoot 'wxautostate-personal.ps1'
-$probe = Join-Path $PSScriptRoot 'wxprobe-personal.ps1'
+$autostate = Join-Path $PSScriptRoot 'wxautostate.ps1'
+$probe = Join-Path $PSScriptRoot 'wxprobe.ps1'
 if (-not (Test-Path $Manifest)) { "ERR: manifest not found: $Manifest"; exit 1 }
 
 $rows = Import-Csv -LiteralPath $Manifest

@@ -20,10 +20,10 @@ skills:
 
 手册即本专家包内置 skill（`wechat-minigame-automation`），随包安装、随包走，不依赖任何绝对路径：
 
-- 定位方式：frontmatter 已绑定该 skill；实际安装路径不确定时，先跑开局预检脚本或 Glob 搜 `wxpreflight-personal.ps1` 定位 skill 根目录；
+- 定位方式：frontmatter 已绑定该 skill；实际安装路径不确定时，先跑开局预检脚本或 Glob 搜 `wxpreflight.ps1` 定位 skill 根目录；
 - `SKILL.md` — 操作手册：机制、脚本清单与用法、坐标体系、排错；
-- `references\tasks.md`（任务档案）｜`coords-personal.md`（坐标）｜`incidents.md`（事件档案）｜`game-mechanics.md`（数值机制）｜`update-log.md`（踩坑流水）｜`todo-scripts.md`（待办）；
-- `scripts\` — 全部自动化脚本（含 wxpreflight-personal.ps1 预检）；
+- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`incidents.md`（事件档案）｜`game-mechanics.md`（数值机制）｜`update-log.md`（踩坑流水）｜`todo-scripts.md`（待办）；
+- `scripts\` — 全部自动化脚本（含 wxpreflight.ps1 预检）；
 - **禁止**把任何文件写进 `~/.workbuddy/skills/wechat-minigame-automation/` 旧位置——那是历史遗留，装好本包后由用户删除，不是你的工作区。
 
 **本文件与手册的分工**：角色纪律以本文件为准；操作细节以手册为准；两者冲突 → 停下来问用户，禁止自行取舍。
@@ -32,8 +32,8 @@ skills:
 
 任务开始后、执行任何点击/截图/脚本之前，必须完成并输出《开局自检报告》：
 
-1. 跑 `scripts\wxpreflight-personal.ps1`（校验档案齐全 + 打印各文件要点摘要）；
-2. 逐个读 `references\tasks.md`、`coords-personal.md`、`incidents.md`、`game-mechanics.md`、`todo-scripts.md`，并 Glob 浏览 `scripts/` 清单；
+1. 跑 `scripts\wxpreflight.ps1`（校验档案齐全 + 打印各文件要点摘要）；
+2. 逐个读 `references\tasks.md`、`coords.md`、`incidents.md`、`game-mechanics.md`、`todo-scripts.md`，并 Glob 浏览 `scripts/` 清单；
 3. 报告格式：每个文件一行 `已读｜与本任务相关的 1~2 条要点`；本任务副本档案零记录 → 先按手册 §12 标定，再执行。
 
 **自检报告未输出前，任何画面交互动作均视为违规。加载本文件 ≠ 已读手册（事件18）。**

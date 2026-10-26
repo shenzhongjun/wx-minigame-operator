@@ -15,7 +15,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | 本文件 | 跨版本稳定核心：机制、脚本清单与用法、坐标体系、排错 |
 | `管理新规.md` | 治理规则（文件分工/增长管理/三态路由），优先级最高 |
 | `references/tasks.md` | 角色-副本任务档案与每日任务分配 |
-| `references/coords-personal.md` / `coords-company.md` | 纯坐标与标定（坐标表/缩放/像素判定/探针校准） |
+| `references/coords.md` | 纯坐标与标定（坐标表/缩放/像素判定/探针校准） |
 | `references/features/dungeon-runs.md` | 副本刷取流程（冥渊/圣殿/航路） |
 | `references/features/daily-claim.md` | 每日领体力流程 |
 | `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/每日循环/角色现状） |
@@ -34,14 +34,10 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 5. 窗口遮挡：置顶面板脚本管不了，点左侧按钮前截图确认完整，被挡请用户清开。
 6. 角色死亡弹「是否使用不死鸟羽毛」→ 点「立即复活」(722,516)（已授权）。
 
-## 0. 双机环境
+## 0. 运行环境（单机）
 
-| | 公司电脑 | 个人电脑 |
-|---|---|---|
-| 屏幕/DPI | （建 skill 时基准） | 2560×1440 @125% |
-| 坐标体系 | DPI-unaware 窗口相对坐标 + 固定补偿 | 设计坐标 1138×708 + 运行时等比换算（DPI-aware） |
-| 脚本 | `wxclick.ps1`/`wxfarm.ps1`（存档不可用） | `*-personal.ps1` |
-| 坐标档案 | `coords-company.md`（存档） | `coords-personal.md` |
+- **仅支持当前这台电脑**（用户 2026-10-26 定版：公司机/双机支持废止，公司代码与档案已删除；跨机器移植不在范围内）。
+- 屏幕/DPI：2560×1440 @125%；坐标体系：设计坐标 1138×708 + 运行时等比换算（DPI-aware）。
 
 - 游戏 UI 严格等比缩放（用户实机确认）：档案坐标 = 设计坐标，脚本按 `S=min(W/1138,H/708)` + 居中留边自动换算；同比例改窗口/换副本的 1-3px 尺寸波动无需处理，窗口移动也不影响（脚本实时读原点）。**长宽比偏差 >1.2% 才停机**（防非等比拉伸/窗口异常）。
 
@@ -53,9 +49,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 ## 2. 坐标校准
 
-个人电脑用**设计坐标 1138×708**：档案/坐标表数字直接传入脚本，`_wxcommon` 按实时客户区等比换算（含居中留边），误差 ≤1px。**⚠️ Read 显示图是缩放图（≈0.40），显示图上的绝对数字严禁直接当点击坐标。** 截图（`wxshot` 锚定模式）已归一化到设计尺寸，图内像素可直接与坐标表对照。
-
-公司电脑（存档）：点安全空白点 → 截图看光标落点 → delta 补偿，|delta|≤8 可忽略。
+本机用**设计坐标 1138×708**：档案/坐标表数字直接传入脚本，`_wxcommon` 按实时客户区等比换算（含居中留边），误差 ≤1px。**⚠️ Read 显示图是缩放图（≈0.40），显示图上的绝对数字严禁直接当点击坐标。** 截图（`wxshot` 锚定模式）已归一化到设计尺寸，图内像素可直接与坐标表对照。
 
 ## 3. 按钮热区偏移
 
@@ -89,37 +83,36 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 | 脚本 | 用途 | 关键参数 |
 |---|---|---|
-| `wxdoclint-personal.ps1` | **文档维护后校验**（§13 维护流程必跑） | 见脚本头 |
-| `wxpreflight-personal.ps1` | **开局协议预检：校验档案齐全+打印要点摘要** | 无参数 |
-| `wxgrind-personal.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
-| `wxclick-personal.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto=模板判定+gated 双击+前台守卫 | `-Pid2 -J` |
-| `wxprobe-personal.ps1` | 状态探针（七态枚举，AUTO_* 用模板距离） | `-Pid2 -Debug` |
-| `wxlogin-personal.ps1` | 固化登录链（已接入 CHAR 探针金框自动验证；GOLD_DIALOG 默认停机防顶号误点，目验挂机/已授权后加 -AssumeGold） | `-Char 1..6 -AssumeGold` |
-| `wxclaim-personal.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
-| `wxpoke-personal.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
-| `wxautostate-personal.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocrbtn OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
+| `wxdoclint.ps1` | **文档维护后校验**（§13 维护流程必跑） | 见脚本头 |
+| `wxpreflight.ps1` | **开局协议预检：校验档案齐全+打印要点摘要** | 无参数 |
+| `wxgrind.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
+| `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto=模板判定+gated 双击+前台守卫 | `-Pid2 -J` |
+| `wxprobe.ps1` | 状态探针（七态枚举，AUTO_* 用模板距离） | `-Pid2 -Debug` |
+| `wxlogin.ps1` | 固化登录链（已接入 CHAR 探针金框自动验证；GOLD_DIALOG 默认停机防顶号误点，目验挂机/已授权后加 -AssumeGold） | `-Char 1..6 -AssumeGold` |
+| `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
+| `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
+| `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocrbtn OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
 | `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
-| `wxregress-personal.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
-| `wxwhitebox-personal.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
-| `wxenumwin-personal.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
-| `wxpopup-personal.ps1` | **弹窗分类器**：挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/无/未知(红线停)，金确定钮守卫+正文模板 | `-Pid2 -Img` |
-| `wxstam-personal.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
-| `wxresize-personal.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
-| `wxrecrop-personal.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
-| `wxnav-tower-personal.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
-| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxocrbtn-personal` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/OCR 按钮文字二次意见（Windows 自带 zh-Hans 引擎，仅判定「自动战斗/取消自动」） | 见脚本头 |
-| `wxclick.ps1`/`wxfarm.ps1`/`wxwait` | 公司电脑/Trae 遗产存档 | — |
-| ~~`wxfarm-personal.ps1`~~ | **已删除（2026-10-26 用户裁决）**：未迁移设计坐标体系（裸屏幕数学，窗口≠1138×708 必错位），且功能已被 wxgrind -AutoRetry 覆盖 | — |
+| `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
+| `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
+| `wxenumwin.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
+| `wxpopup.ps1` | **弹窗分类器**：挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/无/未知(红线停)，金确定钮守卫+正文模板 | `-Pid2 -Img` |
+| `wxstam.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
+| `wxresize.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
+| `wxrecrop.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
+| `wxnav-tower.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
+| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxocrbtn/wxwait/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/OCR 按钮文字二次意见（Windows 自带 zh-Hans 引擎，仅判定「自动战斗/取消自动」）/轮询等待指定状态/枚举窗口/文档规则校验 | 见脚本头 |
+| ~~`wxfarm.ps1`~~ | **已删除（2026-10-26 用户裁决）**：未迁移设计坐标体系（裸屏幕数学，窗口≠1138×708 必错位），且功能已被 wxgrind -AutoRetry 覆盖 | — |
 
 探针状态动作：`GOLD_DIALOG`→按专家红线处理；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`LOGIN_PAGE`→点 (571,527)；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`UNKNOWN`→人工截图。
 
-**硬性路径约束：本 skill 随专家包安装，所有脚本只准写进本 skill 目录下的 `scripts\`（实际安装路径未知时，先跑 preflight 或 Glob 搜 `wxpreflight-personal.ps1` 定位，绝不凭记忆猜路径），严禁 Temp/临时目录**
+**硬性路径约束：本 skill 随专家包安装，所有脚本只准写进本 skill 目录下的 `scripts\`（实际安装路径未知时，先跑 preflight 或 Glob 搜 `wxpreflight.ps1` 定位，绝不凭记忆猜路径），严禁 Temp/临时目录**
 
 **脚本编辑规范：.ps1 含中文必须 UTF-8 带 BOM（PowerShell 5.1 无 BOM 会乱码+伪语法错误）。Edit/Write 后必须转 BOM 并用 Parser::ParseFile 校验 0 错误。**
 
 ## 7. 像素探针原理
 
-结算按钮暗红：`R>100 且 R-B>50 且 22<G<78`；扫描带 BX=915、y 225~445，红块起始 y+20 为点击点（面板 Y 浮动 ±45px，禁写死）。自动战斗=按钮文字模板匹配（§执行规则2），模板绑定**设计尺寸 1138×708**——客户区同比例变化由运行时等比换算+截图归一化吸收，**不再需要重裁**；仅当同比例下持续 UNKNOWN（真实布局重排）才走 wxrecrop。改阈值前先 `wxautostate -Debug`/`-Img` 采样；按钮 RGB 实测数据见 `coords-personal.md`。
+结算按钮暗红：`R>100 且 R-B>50 且 22<G<78`；扫描带 BX=915、y 225~445，红块起始 y+20 为点击点（面板 Y 浮动 ±45px，禁写死）。自动战斗=按钮文字模板匹配（§执行规则2），模板绑定**设计尺寸 1138×708**——客户区同比例变化由运行时等比换算+截图归一化吸收，**不再需要重裁**；仅当同比例下持续 UNKNOWN（真实布局重排）才走 wxrecrop。改阈值前先 `wxautostate -Debug`/`-Img` 采样；按钮 RGB 实测数据见 `coords.md`。
 
 ## 8. 低延迟执行
 
@@ -156,7 +149,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | 截图是纯色 4~5KB | 锁屏/遮挡/最小化（事件14 复盘定论，非渲染假死） | wxprobe=OCCLUDED / wxshot WARN 已自动识别；解锁+wxrestore 后重截，仍异常停手问用户 |
 | 点击落进用户其它窗口 | SetForegroundWindow 被前台锁拦截 | wxclick/wxpoke 已带前台守卫（拒点）；复现→停手 |
 | 按钮模板全 UNKNOWN（dist 双高） | 按钮被遮挡/特效扫过/真实布局重排 | wxshot 人工核对；同比例尺寸下仍持续 UNKNOWN 才重裁模板（单纯尺寸变化已由换算吸收） |
-| 脚本报 `ERR: client=… 长宽比/缩放系数不符` | 窗口被拉成非设计比例、过大过小或尺寸读取异常 | 跑 `wxresize-personal.ps1` 复位（同比例任意尺寸均可，日常无需复位）；仍异常→停止问用户，不要改设计基准常量迁就窗口 |
+| 脚本报 `ERR: client=… 长宽比/缩放系数不符` | 窗口被拉成非设计比例、过大过小或尺寸读取异常 | 跑 `wxresize.ps1` 复位（同比例任意尺寸均可，日常无需复位）；仍异常→停止问用户，不要改设计基准常量迁就窗口 |
 | 点了没反应、光标不在预期位置 | delta 失效/窗口被移动 | 重新校准（读最新 origin） |
 | 光标在按钮上没反应 | 热区偏移 | 下移 +30~50px 重试一次 |
 | 首点无效之后正常 | 首点只激活窗口 | 先点标题栏聚焦 |

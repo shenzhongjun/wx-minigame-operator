@@ -1,7 +1,7 @@
 ﻿param([int]$Rounds = 1, [int]$Pid2 = 0, [int]$RetryX = 936, [int]$RetryY = 269, [int]$SettleWaitSec = 90, [int]$EnterWaitSec = 25, [switch]$AutoRetry)
 # 固化刷本循环（2026-10-24 新增，替代 wxfarm 的通用扫描方案，语法0错误未实战）
 # 思路：不再扫描按钮位置——结算「再来一次」用固定坐标（圣殿两行布局实测 (936,269)），
-#       每步用 wxprobe 验证状态，异常即停。依赖 wxprobe/wxclick-personal 同目录。
+#       每步用 wxprobe 验证状态，异常即停。依赖 wxprobe/wxclick 同目录。
 # 流程/轮：等结算 → 点再来一次 → 验证离场 → (AUTO_OFF 时 gated 开自动) → 等下一结算
 # 退出码：0=完成/重试失败  2=结算等待超时  5=体力弹窗  6=金色弹窗(复活/挂机/登录)  3=自动战斗确保失败  7=会话被踢回登录页(操作员重登后续跑)
 $scripts = $PSScriptRoot
@@ -59,7 +59,7 @@ function Invoke-Probe {
     # 2026-10-26 修复：原 @q 字符串展开把 "-Quick"/"" 绑定到 wxprobe 首位置参数 [int]$Pid2 → 绑定错误秒退 → ERR 停机；
     # -Quick:$Quick 经 -File 传参 bool 字符串化也炸。数组 splat 中 "-Quick" 会被当参数名，是唯一可靠传法。
     $xargs = @(); if ($Quick) { $xargs += "-Quick" }
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe-personal.ps1" -Pid2 $Pid2 @xargs 2>&1
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 @xargs 2>&1
     $state = "ERR"
     foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { $state = $Matches[1] } }
     return $state
@@ -71,7 +71,7 @@ function Invoke-ProbeHeal {
     $st = Invoke-Probe -Quick:$Quick
     if ($st -eq "ERR") {
         "HEAL: probe ERR -> wxresize -> reprobe"
-        & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxresize-personal.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 1
+        & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxresize.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 1
         Start-Sleep -Milliseconds 800
         $st = Invoke-Probe -Quick:$Quick
     }
@@ -79,7 +79,7 @@ function Invoke-ProbeHeal {
 }
 function Invoke-Poke {
     # 轮盘保活戳（用户方案：左下角轮盘任何画面绝对安全——用户在玩时戳一下也无妨，无需探测）
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpoke-personal.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 2
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpoke.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 2
 }
 # 120s 节流（用户 2026-10-24 定版：120s 一戳足够避开挂机弹窗，无需更频）
 $script:lastPoke = Get-Date
@@ -90,7 +90,7 @@ function Invoke-PokeIfDue {
     }
 }
 function Invoke-Click([string]$steps) {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick-personal.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
 function Invoke-PopupGuard {
     # 2026-10-26 新增：GOLD_DIALOG 持续时用 wxpopup 分类——
@@ -100,7 +100,7 @@ function Invoke-PopupGuard {
     # 其余（顶号/扩展券/未知）→ 返回 "STOP"，调用方按红线停机。
     # 返回：OK=已消弹窗可继续 / LOGIN=已被踢登录页 / STOP=红线停机
     # 依据：wxpoke 实测无法重置游戏挂机计时（2026-10-26 圣殿挂机弹窗 115s 戳间隔下仍复现）。
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup-personal.ps1" -Pid2 $Pid2 2>&1
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
     $joined = ($out -join " ")
     if ($joined -match 'POPUP_IDLE') {
         Write-Host "GUARD: POPUP_IDLE -> dismiss (700,513) then verify page"

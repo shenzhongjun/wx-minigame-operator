@@ -14,7 +14,7 @@
 | 第 5 个 | 豁达自在乐逍遥 | 重炮手 | 未分配 | |
 | 第 6 个 | 负责的普莱德 | 斗士 | 未分配 | |
 
-选角页角色卡坐标见 `coords-personal.md`。
+选角页角色卡坐标见 `coords.md`。
 
 术语对照：**刷深渊/冥渊 = 冥渊模式副本；刷堕落圣殿 = 远古副本；刷航路 = 邦庄航路（小队突击）；领体力 = 商城每日礼包两个免费项；邀请函 = 深渊唯一门票。**
 
@@ -24,16 +24,23 @@
 领奖 → 先刷深渊（对应魔域图，邀请函尽即换）→ 堕落圣殿或航路 → 体力不够停
 ```
 
-数值规则见 `game-mechanics.md`。地图入口/坐标见 `coords-personal.md`。
+数值规则见 `game-mechanics.md`。地图入口/坐标见 `coords.md`。
 
 ## 任务原话存档
+
+### v1.1.1 单机化重构（2026-10-26 14:35 下达，同日执行）
+> 顺便把所有适配公司\个人双电脑的文档叙述和公司代码都删了，默认只支持当前这台电脑，把脚本名-personal后缀也删了，打版本号为v1.1.1，git发版
+
+- 执行：git rm 公司版 wxclick.ps1/wxfarm.ps1 + coords-company.md + _wxcommon.ps1.bak；26 个 `*-personal.ps1` git mv 去后缀；coords-personal.md → coords.md；全库 `-personal` 引用替换（CHANGELOG 历史段除外，另加注映射）；SKILL.md「双机环境」→「运行环境（单机）」；脚本头「个人电脑版」措辞清除。
+- 校验：27 个 .ps1 Parser 0 错误 + UTF-8 BOM 保留；公司/双机叙述仅剩「删除记录」条目。
+- 发版：CHANGELOG 1.1.1（并入代码审查清理）+ plugin.json 1.1.1 + 重打 tag v1.1.1（旧 tag 为同日本地预发，未推送，删除重打）。
 
 ### v1.1.0 代码审查与清理（2026-10-26 14:2x 下达，执行中）
 > 你先过一遍v1.1.0版本的代码有没有明显的bug。……铁律：1.有任何疑惑停下来问我，严禁臆测；2.预计token消耗量大的任务，停下来让我协助。
 
-- 审查结论：主链 12 脚本换算一致无运行 bug；实锤=wxfarm-personal 未迁移设计坐标（3 处裸屏幕数学，窗口≠1138×708 必错位）；缺口=①wxrecrop 不同步 wxocrbtn 固定 OCR 区 (184,169)-(272,193)、②_wxcommon.Get-WxBtnState 死代码（判定逻辑散落 4 份内联拷贝）。
-- 用户裁决：**wxfarm-personal 直接退役（删除）**；**只修死代码**；wxrecrop/OCR 同步挂 todo。
-- 执行：删 wxfarm-personal.ps1 + Get-WxBtnState；SKILL/todo/tasks 文档同步；CHANGELOG 1.1.1 + tag。
+- 审查结论：主链 12 脚本换算一致无运行 bug；实锤=wxfarm 未迁移设计坐标（3 处裸屏幕数学，窗口≠1138×708 必错位）；缺口=①wxrecrop 不同步 wxocrbtn 固定 OCR 区 (184,169)-(272,193)、②_wxcommon.Get-WxBtnState 死代码（判定逻辑散落 4 份内联拷贝）。
+- 用户裁决：**wxfarm 直接退役（删除）**；**只修死代码**；wxrecrop/OCR 同步挂 todo。
+- 执行：删 wxfarm.ps1 + Get-WxBtnState；SKILL/todo/tasks 文档同步；CHANGELOG 1.1.1 + tag。
 - 疑似漏迁移排查记录：wxlogin 零命中=正常（坐标全走 wxclick/wxprobe 换算）；wxshot 裸 CopyFromScreen 仅在「绝对屏幕坐标模式」（已标注不推荐）。
 
 ### 体系重打磨·测试流程（2026-10-25 15:25 下达）

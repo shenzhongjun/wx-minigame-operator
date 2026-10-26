@@ -6,7 +6,7 @@
 #   与 assets\btn_auto_off.png / btn_auto_on.png 的掩码做 Jaccard 距离，
 #   距离小者胜；差距不足 0.1 或距离≥0.60 → UNKNOWN（宁可不知，不可误判）
 # OCR 兜底（2026-10-26 新增）：仅当 Jaccard 判 UNKNOWN 且掩码像素≥60（该区确有文字）时，
-#   调 wxocrbtn-personal.ps1 用 Windows OCR 读完整四字区；OCR 明确给出 ON/OFF 才采纳。
+#   调 wxocrbtn.ps1 用 Windows OCR 读完整四字区；OCR 明确给出 ON/OFF 才采纳。
 #   目的是救「按钮换皮/文字被特效遮挡」等模板失配场景，不改变已锁定行为。-NoOcr 关闭兜底。
 # 输出：BTN_STATE=ON|OFF|UNKNOWN + dist_on/dist_off 诊断值（OCR 生效时追加 ocr=[文本](兜底)）
 # -Img 模式：离线分析指定截图（标定/验证用）；默认实时截屏（-Pid2 0=按标题自动发现）
@@ -46,7 +46,7 @@ if (($dOff -le 0.60 -or $dOn -le 0.60) -and ([math]::Abs($dOff - $dOn) -ge 0.10)
 # OCR 兜底：模板失配但该区确实有文字时才触发，OCR 只认明确关键字，其余保持 UNKNOWN
 $ocrNote = ""
 if ($state -eq "UNKNOWN" -and $maskPx -ge 60 -and -not $NoOcr) {
-    $ocrFile = Join-Path $PSScriptRoot 'wxocrbtn-personal.ps1'
+    $ocrFile = Join-Path $PSScriptRoot 'wxocrbtn.ps1'
     if (Test-Path $ocrFile) {
         $ocrArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ocrFile)
         if ($Img -ne "") { $ocrArgs += @('-Img', $Img) } else { $ocrArgs += @('-Pid2', "$Pid2") }

@@ -1,7 +1,7 @@
 ﻿param([int]$Pid2 = 0, [string]$Want = "SETTLE_PAGE", [int]$MaxSec = 180)
-# 轮询等待画面达到指定状态（复用 wxprobe-personal.ps1 判定）
+# 轮询等待画面达到指定状态（复用 wxprobe.ps1 判定）
 # 输出最终探针 STATE 行；达到目标 exit 0，超时 exit 1
-$probe = Join-Path $PSScriptRoot "wxprobe-personal.ps1"
+$probe = Join-Path $PSScriptRoot "wxprobe.ps1"
 $deadline = (Get-Date).AddSeconds($MaxSec)
 $state = ""
 while ($true) {

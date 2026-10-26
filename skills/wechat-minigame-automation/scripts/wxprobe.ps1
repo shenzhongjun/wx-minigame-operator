@@ -1,5 +1,5 @@
 ﻿param([int]$Pid2 = 0, [switch]$Debug, [string]$Img = "", [switch]$Quick)
-# 个人电脑版状态探针（设计坐标体系 1138x708；抓图自动等比换算+归一化）
+# 状态探针（设计坐标体系 1138x708；抓图自动等比换算+归一化）
 # 用途：扫像素返回画面状态枚举，替代「截图->模型读图」确认，省 token
 # 输出: client=...(仅实时模式首行) / STATE=<枚举>
 #   GOLD_DIALOG   金色主按钮弹窗（登录页「进入游戏」/ 复活面板「立即复活」/ 挂机弹窗「确定」
@@ -19,7 +19,7 @@
 # 已知误报（2026-10-25 实测，回归清单已锁行为）：主城金色图标致 GOLD_DIALOG；毁灭之塔红月背景致 SETTLE_PAGE；
 #   战斗中红色怪/特效进入结算扫描带可瞬态误报 SETTLE_PAGE（s1_state_check 案例）——与战败结算面板四信号同签名
 #   （btnMatch/hp/gold/settle 全同），无法修正不误伤；wxgrind 影响=一次空点后自恢复，无害。
-# 校准记录 2026-10-23：金按钮/绿字/暗红/血条/登录白字阈值见 coords-personal.md 探针校准记录
+# 校准记录 2026-10-23：金按钮/绿字/暗红/血条/登录白字阈值见 coords.md 探针校准记录
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 
 if ($Img -ne "") {

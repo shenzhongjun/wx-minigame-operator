@@ -1,10 +1,10 @@
 ﻿# _wxcommon.ps1 - 公共库（体系重打磨 P1，2026-10-25）
 # 单一真相源：客户端尺寸、按钮模板区、窗口查找、尺寸断言、模板匹配。
 # 所有画面交互脚本 dot-source 本文件，禁止再在脚本内复制 P/Invoke 样板或区域常量。
-# 修改本文件 = 修改全部脚本的共同行为；改动后必须跑 wxregress-personal.ps1 离线回归。
+# 修改本文件 = 修改全部脚本的共同行为；改动后必须跑 wxregress.ps1 离线回归。
 # ⚠️ 2026-10-26 用户裁定：wxregress 清单系 AI 标注未经人工核验，暂停使用；恢复前改动验证以实机探针+截图目验替代。
 
-# ---- 配置区（设计坐标系，改动须用户确认并同步 coords-personal.md）----
+# ---- 配置区（设计坐标系，改动须用户确认并同步 coords.md）----
 # 设计坐标系：文档/区域常量/模板均以 1138x708 为基准，运行时由 Get-ClientGeometry 换算到实时屏幕。
 $WX_DESIGN_W = 1138                 # 设计基准尺寸（2026-10-25 用户定版，布局严格等比）
 $WX_DESIGN_H = 708
@@ -99,7 +99,7 @@ function Get-ClientGeometry {
     $s = [math]::Min($sx, $sy)
     if (-not $NoAssert) {
         if ($Exact -and ($cr.R -ne $WX_DESIGN_W -or $cr.B -ne $WX_DESIGN_H)) {
-            Write-Output "ERR: client=$($cr.R)x$($cr.B) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize-personal.ps1）"
+            Write-Output "ERR: client=$($cr.R)x$($cr.B) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize.ps1）"
             exit 8
         }
         if ([math]::Abs($sx - $sy) -gt 0.012) {

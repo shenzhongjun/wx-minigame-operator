@@ -1,5 +1,5 @@
 ﻿param([int]$Pid2 = 0, [switch]$SkipStart)
-# wxnav-tower-personal.ps1 - 毁灭之塔练习模式导航链（2026-10-25 体系重打磨新增）
+# wxnav-tower.ps1 - 毁灭之塔练习模式导航链（2026-10-25 体系重打磨新增）
 # 前提：当前在主城（或用 -SkipStart 跳过 冒险/副本 两段——已在副本页时使用）
 # 链路：冒险(936,664) → 副本(843,563) → 毁灭之塔卡(880,212) → 练习模式(444,163) → 出战(957,633)
 # 每段后内嵌像素断言（阈值来自 wx-verify 标注截图实测），断言失败=截图留证+exit 非零，绝不盲点：
@@ -50,7 +50,7 @@ function Get-LiveCount([int]$x0, [int]$y0, [int]$x1, [int]$y1, [string]$mode) {
 }
 function Stop-NavFail([string]$step, [string]$detail) {
     "NAV_FAIL: $step ($detail)"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxshot-personal.ps1" -Out $shot -Pid2 $Pid2 | Select-Object -Last 1
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxshot.ps1" -Out $shot -Pid2 $Pid2 | Select-Object -Last 1
     "fail screenshot=$shot"
     exit 9
 }

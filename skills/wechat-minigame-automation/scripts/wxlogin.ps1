@@ -7,12 +7,12 @@
 # 角色卡坐标：1(138,342) 2(421,342) 3(697,342) 4(971,342) 5(139,536) 6(414,536)
 $scripts = $PSScriptRoot
 function Get-State {
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe-personal.ps1" -Pid2 $Pid2 2>&1
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
     foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { return $Matches[1] } }
     return "ERR"
 }
 function Invoke-Click([string]$steps) {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick-personal.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
 $card = @{ 1 = "138:342"; 2 = "421:342"; 3 = "697:342"; 4 = "971:342"; 5 = "139:536"; 6 = "414:536" }
 if (-not $card.ContainsKey($Char)) { "ERR: Char must be 1-6"; exit 1 }

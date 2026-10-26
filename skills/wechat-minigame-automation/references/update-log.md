@@ -6,7 +6,7 @@
 
 - [已修复] **绝对坐标 → 设计坐标体系**（用户确认 UI 严格等比缩放；换副本客户区 1138→1135/1139 的漂移始终靠 wxresize/±2px 容忍是止血）。实现：`_wxcommon` 新增 `$WX_DESIGN_W/H=1138/708`、`Get-ClientGeometry`（S=min(W/1138,H/708)+居中留边，长宽比偏差>1.2% 才停，缩放 0.75-2.0）、`ConvertTo-ScreenPoint`/`ConvertFrom-ScreenPoint`、`Get-DesignBitmap`/`Get-DesignRegion`（NearestNeighbor 归一化，保留原始 RGB 供色彩阈值/白掩码使用）、`Resize-WxBitmapNearest`。迁移 wxprobe/wxclick/wxgrind/wxpopup/wxstam/wxnav/wxlogin/wxpoke/wxscroll/wxshot/wxautostate/wxrecrop：**文档与区域常量零改动**。wxresize 降级为可选工具，断言由"精确 1138×708"改为"长宽比+缩放范围"。离线验证：6 张基线图 × 1135/1139/1252 三种尺寸，wxprobe STATE 与 wxautostate BTN_STATE 全部一致；22/22 回归全过。**待实机验证**：换副本转场/最大化/还原下同比例换算 + 冒烟链。
 - [已提升] `wxshot` 锚定模式默认输出设计尺寸图（`-Raw` 保留实时尺寸）；`wxrecrop` 输入自动归一化、输出固定 59×13 设计模板。
-- [待观察] **自动战斗状态 OCR 二次意见（PS + Windows 自带 OCR，零新依赖）**：新增 `wxocrbtn-personal.ps1`，裁完整四字区 (184,169)-(272,193)→灰度反相（`245-lum`）→双三次放大 8×→`Windows.Media.Ocr`(zh-Hans) 识别→关键字包含判定（含「取消自动」=ON/含「自动战斗」=OFF，其余 UNKNOWN）。`wxautostate` 仅在 Jaccard=UNKNOWN 且按钮区掩码≥60 时自动兜底（`-NoOcr` 关闭）。实测 4 张实拍 × F=6/8/10：关态稳定读「自动战斗一」、开态「取消自动」，主城/塔页/选角页返回空（无假阳性）；人工制造模板失配图（文字压缩 82%）实测触发兜底并正确输出 `BTN_STATE=OFF ocr=[自动战斗](兜底)`。**鉴于此方案验证通过，判定"改 Python"无必要**：单次调 Python 反而更慢（641ms vs PS 225ms 同区域扫描），瓶颈是进程启动而非语言。局限：非战斗页若该区偶有白字会多花 ~0.7s 走一次 OCR（结果仍 UNKNOWN）；live 未测。
+- [待观察] **自动战斗状态 OCR 二次意见（PS + Windows 自带 OCR，零新依赖）**：新增 `wxocrbtn.ps1`，裁完整四字区 (184,169)-(272,193)→灰度反相（`245-lum`）→双三次放大 8×→`Windows.Media.Ocr`(zh-Hans) 识别→关键字包含判定（含「取消自动」=ON/含「自动战斗」=OFF，其余 UNKNOWN）。`wxautostate` 仅在 Jaccard=UNKNOWN 且按钮区掩码≥60 时自动兜底（`-NoOcr` 关闭）。实测 4 张实拍 × F=6/8/10：关态稳定读「自动战斗一」、开态「取消自动」，主城/塔页/选角页返回空（无假阳性）；人工制造模板失配图（文字压缩 82%）实测触发兜底并正确输出 `BTN_STATE=OFF ocr=[自动战斗](兜底)`。**鉴于此方案验证通过，判定"改 Python"无必要**：单次调 Python 反而更慢（641ms vs PS 225ms 同区域扫描），瓶颈是进程启动而非语言。局限：非战斗页若该区偶有白字会多花 ~0.7s 走一次 OCR（结果仍 UNKNOWN）；live 未测。
 
 ## 2026-10-25（深夜·人工核验固化三件套）
 
@@ -21,24 +21,24 @@
 - [已提升] **尺寸断言加 ±2px 容差（1136-1140×706-710）**：实验 3/3 实锤「再来一次」进图转换确定性触发 WeChatAppEx 重申记忆几何（1138→1139），非偶发；两宽度下模板 dist 双 0/导航断言/点击热区全部正常，1px 不构成事件19 式布局重排。wxresize 保留为复位手段。如需回滚：_wxcommon Get-ClientGeometry 改回首行等值断言。
 - [待观察] **wxprobe/wxshot 无前台守卫**：用户切走窗口后探针/截图读到其它窗口像素（网盘页实测 login=3848/side=12936 假信号，探针 UNKNOWN 不误判但数据不可信；点击侧 wxclick 前台守卫可保安全拒点）。待办：wxprobe 加前台校验（对 GetForegroundWindow≠游戏时报 STATE=FOREGROUND_LOST）。
 
-- [已提升] **wxrecrop-personal.ps1 模板重裁一条龙落地（P5 完成）**：自动行剖面求文字区 bbox（图标/文字分组，取最底组）→ 备份旧模板+_wxcommon → 1:1 裁双模板 → String.Replace 更新常量 → 新进程离线验证（dist 双 0）→ 失败自动回滚。实测 (195,175)-(253,187) 59×13，coords 已同步。**两个脚本教训：①-replace 替换串会展开变量（`"\$WX"` ≠ 字面 `$WX`），改配置文件必须用 String.Replace 字面量替换；②$ErrorActionPreference=Stop 下子进程 stderr 2>&1 会炸主脚本，验证段须降 Continue**。尺寸链条至此全闭环：漂移→wxresize 复位；主动改尺寸→wxrecrop 一条龙重标。
+- [已提升] **wxrecrop.ps1 模板重裁一条龙落地（P5 完成）**：自动行剖面求文字区 bbox（图标/文字分组，取最底组）→ 备份旧模板+_wxcommon → 1:1 裁双模板 → String.Replace 更新常量 → 新进程离线验证（dist 双 0）→ 失败自动回滚。实测 (195,175)-(253,187) 59×13，coords 已同步。**两个脚本教训：①-replace 替换串会展开变量（`"\$WX"` ≠ 字面 `$WX`），改配置文件必须用 String.Replace 字面量替换；②$ErrorActionPreference=Stop 下子进程 stderr 2>&1 会炸主脚本，验证段须降 Continue**。尺寸链条至此全闭环：漂移→wxresize 复位；主动改尺寸→wxrecrop 一条龙重标。
 
 - [已提升] **wxprobe 新增 CHAR1-6 选角金框检测**：扫 6 卡顶框条带金像素（选中 61~117/未选 0，阈值 40+唯一性），副本页金 tab 门控（步长2 计数≥40 强制 CHAR_NONE）防副本页卡面金饰误触发。标定集=wx-verify 标注截图，回归清单 4 行升格 CHAR 断言。
 - [已提升] **wxlogin 接入 CHAR 探针全自动**：金框不再人工目验；GOLD_DIALOG 默认停机（顶号红线），目验后 -AssumeGold 放行。实战：GOLD→LOGIN→CHAR1→点卡→CHAR4→主城全链一次通过。
 - [已提升] **wxnav-tower 导航链落地**：主城→副本→塔→练习→出战，三段断言（A 副本tab金≥150/B 塔页红≥100/C 练习高亮≥50），失败自动截图停机。教训：**断言计数必须与标定同步长**（步长2 vs 逐像素差 3 倍，NAV_FAIL 假阳性一次）。
 - [已提升] **wxgrind -AutoRetry**：每轮自动扫描「再来一次」(x=915,y=扫描)替代人工传参，扫描失败回退固定坐标。实战 target=915,258(auto) 定位成功。
 - [已提升] **wxshot -Grid**：100px 网格+坐标刻度叠加，读图免心算缩放。新增 wxenumwin 诊断工具（枚举 pid 全部可见窗口）。
-- [已提升] **wxresize-personal.ps1 尺寸复位工具落地**（用户简报方案）：最小化/最大化先还原 → 实测 chrome 差值换算外框（**AdjustWindowRect 在 WeChatAppEx 自绘边框窗口上会多加 37px 标题栏致高度超差，禁用**）→ SetWindowPos(SWP_NOZORDER) → 回读校验 ±2px。实战：1139→复位→1138×708 一次成功，探针/模板即恢复，零重标定。顺带实战验证 -Grid 网格截图与 CHAR1 实时检测（61 分与离线标定一致）。
+- [已提升] **wxresize.ps1 尺寸复位工具落地**（用户简报方案）：最小化/最大化先还原 → 实测 chrome 差值换算外框（**AdjustWindowRect 在 WeChatAppEx 自绘边框窗口上会多加 37px 标题栏致高度超差，禁用**）→ SetWindowPos(SWP_NOZORDER) → 回读校验 ±2px。实战：1139→复位→1138×708 一次成功，探针/模板即恢复，零重标定。顺带实战验证 -Grid 网格截图与 CHAR1 实时检测（61 分与离线标定一致）。
 - [已修复] wxwhere `$pid` 只读自动变量 bug（改 $wpid）。
 - [已提升] **CHAR5/6 条带实战校准完成（22:2x）**：实测点第二排卡后选角页自动上滚，金框底边 y≈581，条带改 (10,572,250,590)/(300,572,530,590)；CHAR5=239/CHAR6=57 实战双验证通过。**新机制**：①选角页点第二排卡→页面自动上滚，从 5-8 切回 1-4 必先 wxscroll 滚轮向上 3 格复位，否则旧坐标点到锁定槽弹「角色栏扩展券」购买弹窗（涉商城红线只点取消 (471,502)，gold≈989/side=0 签名区别于主城误报 189/210）；②CHAR 条带对滚动位置敏感：半滚动状态卡4 实际选中但读数 21<40（漏报不误报），目验兜底有效。→ 删行。
 
 ## 2026-10-25（下午·体系重打磨）
 
 - [已提升] **P1 公共库 `_wxcommon.ps1` 落地**：配置常量（1138×708/按钮区/点击点）+ 标题优先窗口查找（pid 0=自动发现，清除 23676 残留默认值，顺带修复 wxshot 多窗口选错 bug）+ 尺寸断言 + 模板匹配全套单源化；wxprobe/wxclick/wxpoke/wxfarm/wxautostate/wxshot/wxwhere/wxrestore/wxscroll 九脚本重构为 dot-source，样板代码清除。SKILL 脚本清单加行。
-- [已提升] **P2 离线回归 `wxregress-personal.ps1` + `_regress-manifest.csv`（19 图 21 断言）落地**：wxprobe 增 -Img 离线模式；首次全量跑 PASS=21 FAIL=0。已知误报（主城 GOLD/塔页 SETTLE）锁定为基线，行为变化即 FAIL。战斗中红怪进扫描带的瞬态 SETTLE_PAGE 误报与战败面板同签名不可修正（影响=一次空点自恢复），s1_state_check 仅锁 btn 断言。
+- [已提升] **P2 离线回归 `wxregress.ps1` + `_regress-manifest.csv`（19 图 21 断言）落地**：wxprobe 增 -Img 离线模式；首次全量跑 PASS=21 FAIL=0。已知误报（主城 GOLD/塔页 SETTLE）锁定为基线，行为变化即 FAIL。战斗中红怪进扫描带的瞬态 SETTLE_PAGE 误报与战败面板同签名不可修正（影响=一次空点自恢复），s1_state_check 仅锁 btn 断言。
 - [已修复] wxwhere `$pid` 只读自动变量 bug（改 $wpid）。
 - [已修复] **窗口尺寸断言制度落地（用户定版 1138×708 = 最终版）**：wxprobe/wxclick/wxpoke/wxfarm/wxautostate 内置 client 断言，不符 exit 8 停机；wxgrind/wxlogin 探针返回 ERR 时立即 STOP（exit 9）。断言实战首秀即逮到窗口已变为 1138×708（原定版 1146×711 失效）。三角色测试流程全程零误动作。→ 删行。
-- [已提升] **1138×708 模板体系重建**：文字区 (196,176)-(253,187)（wxwhitebox 像素级实测，新工具 scripts/wxwhitebox-personal.ps1）；新布局=圆形图标在文字上方；双模板重裁（58×12，交叉 0.755，离线+实战双验证），旧模板备份 .bak-1146x711；四脚本区域常量同步。毁灭之塔流程坐标入 coords-personal（卡片 880,212 / 练习模式 444,163 / 出战 957,633 / 再来一次 924,269）。→ 删行。
+- [已提升] **1138×708 模板体系重建**：文字区 (196,176)-(253,187)（wxwhitebox 像素级实测，新工具 scripts/wxwhitebox.ps1）；新布局=圆形图标在文字上方；双模板重裁（58×12，交叉 0.755，离线+实战双验证），旧模板备份 .bak-1146x711；四脚本区域常量同步。毁灭之塔流程坐标入 coords（卡片 880,212 / 练习模式 444,163 / 出战 957,633 / 再来一次 924,269）。→ 删行。
 - [待观察] **结算画面点自动战斗按钮=延迟生效**：结算屏点击不改变按钮像素（模板无法验证），效果在下一场战斗生效（角色1 实证：settle 屏 2 次 gated 点击→下一场自动已开）。风险：双击可能双切换 ON→OFF。**规则已入 coords：优先进图后确保；结算屏至多点一次，且不得据结算屏模板读数判定切换成功**。下次角色切换场景再验证 → 14 天悬置提请用户。
 - [已提升] **塔页探针误报 SETTLE_PAGE 已根治（深夜 PAGE 重标定）**：TOWER_PAGE 状态 + SETTLE_PAGE btnMatch 门控，回归锁定正确分类。→ 删行。
 - [已修复] wxshot 窗口锚定模式多窗口选错窗口 bug（H=12720644 怪值）：根因=取 pid 第一个可见窗口；已随 P1 公共库改为标题「勇士之心」优先匹配，锚定模式恢复可用。
@@ -63,14 +63,14 @@
 
 - [已修复] 全脚本资产路径审计（20 脚本通读）：wxclick/wxfarm/wxprobe/wxautostate 四个脚本硬编码旧目录 assets 绝对路径（搬家未同步，删旧 `~/.workbuddy/skills/` 当天模板加载全挂）→ 已改 `$PSScriptRoot` 包内相对定位，合成截图离线实测通过（dist_off=0，交叉距离 0.758 与 SKILL.md 登记一致）。下次真实开局 preflight 通过 → 删行。
 - [已修复] wxshot 不支持窗口锚定 + wxclaim 硬编码窗口原点 (1414,178)（窗口挪动即截错区域）：wxshot 增 `-OX<0` 窗口锚定模式（自动取客户区原点/尺寸），wxclaim 已切换；两脚本均加纯色截图守卫（事件4/15 同源），wxprobe 亦加 `STATE=OCCLUDED`（上游 wxwait/wxgrind/wxlogin 语义安全）。下次窗口挪动后截图验证 → 删行。
-- [已修复] wxfarm-personal Ensure-Auto 诊断行污染返回值（`$ems` 实为字符串数组+整数混合，`-lt 0` 靠类型过滤侥幸工作）；wxautostate `-Img` 喂小图时 GetPixel 越界抛千级异常 → 诊断行改 Write-Host、wxautostate 加尺寸守卫（小图一句明确报错）。下次 wxfarm 任何运行验证 → 删行。
+- [已修复] wxfarm Ensure-Auto 诊断行污染返回值（`$ems` 实为字符串数组+整数混合，`-lt 0` 靠类型过滤侥幸工作）；wxautostate `-Img` 喂小图时 GetPixel 越界抛千级异常 → 诊断行改 Write-Host、wxautostate 加尺寸守卫（小图一句明确报错）。下次 wxfarm 任何运行验证 → 删行。
 - [已修复] wxscroll 实发两次滚轮（总滚动 2×Notches）输出却报 Notches：行为未动（存档脚本），输出信息改诚实（sent 2x）。→ 删行。
 - [待观察] 轮盘保活 120s 节流（wxpoke + wxgrind Invoke-PokeIfDue）：拖拽单次实测生效，"避开挂机弹窗"未在真实长间隙验证。下次批间长间隙验证通过 → 删行。
 - [待观察] wxclaim 禁盲跑：对已领角色重复领取点到付费卡（事件16）。恢复一键链待用户带教固化 → 完成后升 coords 并删行。
 - [待观察] 冥渊节点过渡 >2.5s 跟进点击点到已开页卡片（事件17）：用户将人工确认流程，确认后升 coords/ incidents 定稿并删行。
 - [已提升] 蓝屏假死归因修正：纯蓝实为当时锁屏所致（事件14 复盘定论），「渲染假死/手机端占用会话」作废，incidents/SKILL 排错表已改档。删行。
 - [已修复] wxgrind GOLD 连续 3 次确认（战斗结束金色爆闪瞬时误报）：脚本已改，下次战斗结束场景验证通过 → 删行。
-- [已修复] 冰之魔域-3 冥渊模式坐标 (681,462)：已改档 coords-personal（旧 694,454 作废），下次进入弹窗核对通过 → 删行。
+- [已修复] 冰之魔域-3 冥渊模式坐标 (681,462)：已改档 coords（旧 694,454 作废），下次进入弹窗核对通过 → 删行。
 - [已修复] 航路两行结算「再来一次」(936,244)（面板浮动比圣殿高 25px）：已改档，下次航路循环验证 → 删行。
 - [已修复] wxgrind/wxlogin/wxclaim/wxpoke 固化四件套：wxgrind 已实战转正（39 轮零异常）；wxlogin/wxclaim/poke 待实战 → wxlogin/wxclaim 转 待观察，wxpoke 并入轮盘保活条目。
 - [已提升] 点券 -1000 = 公会签到每天 1000 钻石（非误购）→ game-mechanics.md。删行。
@@ -78,7 +78,7 @@
 - [已提升] CopyFromScreen「句柄无效」=锁屏特征；蓝屏假死处置 → SKILL.md 排错表。删行。
 - [已提升] 前台锁拦截 SetForegroundWindow → 前台守卫进 wxclick/wxpoke + SKILL.md 排错表。删行。
 - [已提升] GOLD_DIALOG 战斗金色爆闪瞬时误报 → 探针按钮守卫 + wxgrind 连续3次。删行。
-- [已提升] 「返回城镇」回副本页不回主城 → coords-personal.md。删行。
+- [已提升] 「返回城镇」回副本页不回主城 → coords.md。删行。
 - [已提升] 每日任务执行流水（角色1-4 战绩/体力对账）→ 已写入 tasks.md 执行记录→迁移 incidents/无保留价值。删行。
 
 ## 2026-10-23

@@ -6,17 +6,24 @@
 
 ## [1.1.1] - 2026-10-26
 
-**主题：v1.1.0 代码审查清理——wxfarm 退役 + 死代码删除**
+**主题：v1.1.0 代码审查清理 + 单机化重构（脚本去 -personal 后缀、删除公司机代码）**
 
 ### 移除
-- **`wxfarm-personal.ps1` 删除（用户裁决）**：未迁移设计坐标体系（FindBtnY/DoClick/Ensure-Auto 三处裸屏幕数学，窗口≠1138×708 必错位），且扫描能力已被 wxgrind -AutoRetry 归一化版覆盖。「wxfarm 失灵悬案」随之作废。
-- `_wxcommon.ps1` 删除 `Get-WxBtnState` 死代码（零调用者；判定逻辑实际由 wxprobe/wxautostate/wxclick 各自内联）。
+- **wxfarm.ps1（原 wxfarm-personal）删除（用户裁决）**：未迁移设计坐标体系（FindBtnY/DoClick/Ensure-Auto 三处裸屏幕数学，窗口≠1138×708 必错位），且扫描能力已被 wxgrind -AutoRetry 归一化版覆盖。「wxfarm 失灵悬案」随之作废。
+- `_wxcommon.ps1` 删除 `Get-WxBtnState` 死代码（零调用者；判定逻辑实际由 wxprobe/wxautostate/wxclick 各自内联）+ 陈旧 `_wxcommon.ps1.bak`。
+- **公司机代码与双机档案删除（用户 2026-10-26 令）**：公司版 `wxclick.ps1`/`wxfarm.ps1`、`references/coords-company.md`。双机支持废止，**仅支持当前这台电脑**（2560×1440 @125%）。
+
+### 变更（重命名）
+- **全部脚本去除 `-personal` 后缀**：`wxprobe-personal.ps1`→`wxprobe.ps1` 等 26 个；历史记录（incidents/update-log 等）中的 `*-personal` 即现同名无后缀脚本。
+- `references/coords-personal.md` → `references/coords.md`；所有文档/脚本内引用同步。
+- 脚本头注释与 SKILL.md「双机环境」章节改写为单机口径（「个人电脑版/公司电脑」叙述清除）。
 
 ### 文档
 - tasks.md 存档本次审查任务与用户裁决；todo-scripts.md 新增「wxrecrop 未同步 wxocrbtn OCR 区」待办（挂账）；SKILL.md/dungeon-runs.md 同步 wxfarm 状态。
 
 ### 审查结论（2026-10-26）
 - 主链 12 脚本（wxprobe/wxclick/wxgrind/wxpopup/wxstam/wxlogin/wxpoke/wxscroll/wxshot/wxautostate/wxrecrop/wxnav）设计坐标换算一致，无运行 bug；wxlogin 零命中=正常（坐标全走 wxclick/wxprobe 换算）。
+- 重构后校验：27 个 .ps1 全部 Parser 0 错误 + UTF-8 BOM 保留。
 
 ## [1.1.0] - 2026-10-26
 

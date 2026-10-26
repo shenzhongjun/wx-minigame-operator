@@ -1,7 +1,7 @@
-﻿# wxpreflight-personal.ps1 — 开局协议预检（2026-10-24 新增，配合 SKILL.md §A）
+﻿# wxpreflight.ps1 — 开局协议预检（2026-10-24 新增，配合 SKILL.md §A）
 # 用途：任务开始后、任何画面交互之前运行。校验 skill 档案齐全并打印各文件要点摘要，
 #       作为《开局自检报告》的硬凭证。退出码：0=全部就绪；1=有缺失（禁止开工）。
-# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxpreflight-personal.ps1
+# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxpreflight.ps1
 
 $ErrorActionPreference = 'Stop'
 $base = Split-Path -Parent $PSScriptRoot   # skill 根目录（本脚本位于 scripts/ 下一级即根）
@@ -10,7 +10,7 @@ $required = @(
   'SKILL.md',
   '管理新规.md',
   'references\tasks.md',
-  'references\coords-personal.md',
+  'references\coords.md',
   'references\incidents.md',
   'references\game-mechanics.md',
   'references\todo-scripts.md',

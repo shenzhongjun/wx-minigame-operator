@@ -1,9 +1,9 @@
-﻿# wxdoclint-personal.ps1 — skill 文档结构校验（2026-10-24 新增，配合 管理新规.md v2 第三节）
+﻿# wxdoclint.ps1 — skill 文档结构校验（2026-10-24 新增，配合 管理新规.md v2 第三节）
 # 用途：维护 SKILL.md / references 后运行，机器验证防臃肿规则是否守住。
 # 校验项：① SKILL.md 行数 ≤200（≥180 警戒）② 路由完整性：每个 references 档案（含 features/）
 #         必须在 SKILL.md 正文被提及 ③ 输出行数摘要。
 # 退出码：0=通过；1=有违规（先修复再交付）。
-# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxdoclint-personal.ps1
+# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxdoclint.ps1
 
 $ErrorActionPreference = 'Stop'
 $base = Split-Path -Parent $PSScriptRoot   # skill 根目录
