@@ -21,6 +21,7 @@ $required = @(
 
 $missing = @()
 Write-Host '=== wxpreflight 开局预检 ==='
+Write-Host '坐标系：设计坐标 1138x708；运行时按客户区长宽比等比换算（coords 文档数字可直接使用）'
 foreach ($f in $required) {
   $p = Join-Path $base $f
   if (Test-Path -LiteralPath $p) {

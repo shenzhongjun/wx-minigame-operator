@@ -1,5 +1,5 @@
 ﻿param([int]$Pid2 = 0, [switch]$Debug, [string]$Img = "", [switch]$Quick)
-# 个人电脑版状态探针（DPI-aware 客户区物理坐标体系）
+# 个人电脑版状态探针（设计坐标体系 1138x708；抓图自动等比换算+归一化）
 # 用途：扫像素返回画面状态枚举，替代「截图->模型读图」确认，省 token
 # 输出: client=...(仅实时模式首行) / STATE=<枚举>
 #   GOLD_DIALOG   金色主按钮弹窗（登录页「进入游戏」/ 复活面板「立即复活」/ 挂机弹窗「确定」
@@ -12,7 +12,7 @@
 #                 （2026-10-23 晚重写：模板匹配判定，与血量/tip/底色全部无关）
 #   OCCLUDED      纯色画面（最小化/遮挡/锁屏），先 wxrestore（事件4/15）
 #   UNKNOWN       以上都不是（需人工截图确认）
-# -Img <png>：离线分析整客户端区截图（回归测试/标定用，跳过窗口查找与纯色守卫）
+# -Img <png>：离线分析整客户端区截图（任意尺寸自动归一化到 1138x708；回归/标定用，跳过窗口查找与纯色守卫）
 # -Quick：轻量模式（等待结算轮询用）——只算 金弹窗/结算带/体力弹窗 三个廉价特征，
 #         跳过 模板/CHAR/血条/登录侧栏（省 ~60% 像素扫描）；输出状态限定 GOLD_DIALOG/SETTLE_PAGE/STAMINA_POP/UNKNOWN
 # -Debug 输出各区域命中像素数，用于现场校准阈值/区域
@@ -25,15 +25,17 @@
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
+    if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
+        $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
+        if (-not [object]::ReferenceEquals($norm, $bmp)) { $bmp.Dispose() }
+        $bmp = $norm
+    }
 } else {
     $h = Find-GameWindow -Pid2 $Pid2
     if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     $geo = Get-ClientGeometry $h
-    "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY)"
-    $bmp = New-Object System.Drawing.Bitmap $geo.W, $geo.H
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($geo.OX, $geo.OY, 0, 0, (New-Object System.Drawing.Size $geo.W, $geo.H))
-    $g.Dispose()
+    "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
+    $bmp = Get-DesignBitmap $geo
     # 遮挡守卫（事件4/15）：网格采样色彩多样性，整屏纯色=最小化/遮挡/锁屏，像素不可信 → 报 OCCLUDED
     $distinct = @{}
     for ($yy = 0; $yy -lt $bmp.Height; $yy += 40) { for ($xx = 0; $xx -lt $bmp.Width; $xx += 40) {
@@ -42,7 +44,7 @@ if ($Img -ne "") {
     if ($distinct.Count -le 2) { $bmp.Dispose(); "STATE=OCCLUDED"; "debug: flat screenshot (最小化/遮挡/锁屏)，画面不可信，先 wxrestore"; exit 0 }
 }
 
-# --- 区域定义（客户区物理坐标；绑定 1138x708 布局，尺寸变更须重标） ---
+# --- 区域定义（设计坐标 1138x708；抓图已归一化到设计尺寸，客户区等比变化无需重标） ---
 # 金色主按钮区：登录「进入游戏」+ 复活「立即复活」/挂机「确定」的并集
 $RX0=440; $RY0=470; $RX1=800; $RY1=560
 # 体力弹窗绿色文字区

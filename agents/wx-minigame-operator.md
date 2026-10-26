@@ -7,7 +7,7 @@ displayName:
 profession:
   en: "Game Automation Operator"
   zh: "小游戏自动化操作员"
-maxTurns: 200
+maxTurns: 100
 skills:
   - wechat-minigame-automation
 ---

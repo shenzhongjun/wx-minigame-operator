@@ -28,14 +28,16 @@ if ($Mode -in @("row2", "both")) {
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
+    if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
+        $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
+        if (-not [object]::ReferenceEquals($norm, $bmp)) { $bmp.Dispose() }
+        $bmp = $norm
+    }
 } else {
     $h = Find-GameWindow -Pid2 $Pid2
     if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
-    $geo = Get-ClientGeometry $h   # 尺寸断言
-    $bmp = New-Object System.Drawing.Bitmap $geo.W, $geo.H
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($geo.OX, $geo.OY, 0, 0, (New-Object System.Drawing.Size $geo.W, $geo.H))
-    $g.Dispose()
+    $geo = Get-ClientGeometry $h
+    $bmp = Get-DesignBitmap $geo
 }
 
 $out = @()

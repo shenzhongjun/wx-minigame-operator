@@ -38,20 +38,21 @@ function Import-PopupTemplates {
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
-    if ($bmp.Width -lt ($PX1 + 1) -or $bmp.Height -lt ($PY1 + 1)) {
-        "ERR: image $($bmp.Width)x$($bmp.Height) 小于弹窗区 ($PX1,$PY1)，-Img 需传完整客户端区截图"; exit 4
+    if ($bmp.Width -lt 800 -or $bmp.Height -lt 550) {
+        "ERR: image $($bmp.Width)x$($bmp.Height) 过小，-Img 需传完整客户端区截图"; exit 4
+    }
+    if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
+        $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
+        if (-not [object]::ReferenceEquals($norm, $bmp)) { $bmp.Dispose() }
+        $bmp = $norm
     }
     $live = Get-PopupMask $bmp $PX0 $PY0
 } else {
     $h = Find-GameWindow -Pid2 $Pid2
     if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
-    $geo = Get-ClientGeometry $h   # 尺寸断言
-    # 截联合区域：正文区+金确定钮带 (423,356)-(780,532)
-    $fw = $GOLDX1 - $PX0 + 1; $fh = $GOLDY1 - $PY0 + 1
-    $bmp = New-Object System.Drawing.Bitmap $fw, $fh
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen(($geo.OX + $PX0), ($geo.OY + $PY0), 0, 0, (New-Object System.Drawing.Size $fw, $fh))
-    $g.Dispose()
+    $geo = Get-ClientGeometry $h
+    # 截联合区域：正文区+金确定钮带 (423,356)-(780,532)（设计坐标，自动换算并归一化）
+    $bmp = Get-DesignRegion $geo $PX0 $PY0 $GOLDX1 $GOLDY1
     $live = Get-PopupMask $bmp 0 0
 }
 

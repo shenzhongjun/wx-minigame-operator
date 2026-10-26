@@ -19,28 +19,26 @@ if ([WXCommon]::GetForegroundWindow() -ne $hwnd) {
     if ([WXCommon]::GetForegroundWindow() -ne $hwnd) { "ERR: game not foreground，拒绝导航"; exit 7 }
 }
 $geo = Get-ClientGeometry $hwnd
-"client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY)"
-$OX = $geo.OX; $OY = $geo.OY
+"client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
 $shot = "C:\Users\zhouyijie\WorkBuddy\游戏\wx-verify\nav_tower_fail.png"
 
 function Invoke-NavClick([int]$x, [int]$y, [int]$delayMs) {
-    $ax = $OX + $x + (Get-Random -Minimum -3 -Maximum 4)
-    $ay = $OY + $y + (Get-Random -Minimum -3 -Maximum 4)
+    # 每段点击前重读几何：进塔转场会重申客户区尺寸（1138→1135），避免用过期换算
+    $g = Get-ClientGeometry $hwnd
+    $p = ConvertTo-ScreenPoint $g ($x + (Get-Random -Minimum -3 -Maximum 4)) ($y + (Get-Random -Minimum -3 -Maximum 4))
     Start-Sleep -Milliseconds (Get-Random -Minimum 180 -Maximum 320)
-    [WXCommon]::SetCursorPos($ax, $ay) | Out-Null
+    [WXCommon]::SetCursorPos($p.X, $p.Y) | Out-Null
     Start-Sleep -Milliseconds 100
     [WXCommon]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
     Start-Sleep -Milliseconds 60
     [WXCommon]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
-    "click $x,$y -> $ax,$ay"
+    "click $x,$y -> $($p.X),$($p.Y)"
     Start-Sleep -Milliseconds $delayMs
 }
 function Get-LiveCount([int]$x0, [int]$y0, [int]$x1, [int]$y1, [string]$mode) {
-    $w = $x1 - $x0 + 1; $h = $y1 - $y0 + 1
-    $bmp = New-Object System.Drawing.Bitmap $w, $h
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen(($OX + $x0), ($OY + $y0), 0, 0, (New-Object System.Drawing.Size $w, $h))
-    $g.Dispose()
+    $g = Get-ClientGeometry $hwnd
+    $bmp = Get-DesignRegion $g $x0 $y0 $x1 $y1
+    $w = $bmp.Width; $h = $bmp.Height
     $n = 0
     for ($y = 0; $y -lt $h; $y++) { for ($x = 0; $x -lt $w; $x++) {
         $c = $bmp.GetPixel($x, $y)
@@ -52,7 +50,7 @@ function Get-LiveCount([int]$x0, [int]$y0, [int]$x1, [int]$y1, [string]$mode) {
 }
 function Stop-NavFail([string]$step, [string]$detail) {
     "NAV_FAIL: $step ($detail)"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxshot-personal.ps1" -Out $shot -OX $OX -OY $OY -W $geo.W -H $geo.H -Pid2 $Pid2 | Select-Object -Last 1
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxshot-personal.ps1" -Out $shot -Pid2 $Pid2 | Select-Object -Last 1
     "fail screenshot=$shot"
     exit 9
 }

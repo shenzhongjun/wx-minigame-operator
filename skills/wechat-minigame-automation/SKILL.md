@@ -20,14 +20,14 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/features/daily-claim.md` | 每日领体力流程 |
 | `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/每日循环/角色现状） |
 | `references/update-log.md` | 踩坑/优化流水缓冲区 |
-| `references/incidents.md` | 事件根因档案（事件1-18） |
+| `references/incidents.md` | 事件根因档案（事件1-19） |
 | `references/todo-scripts.md` | 待办清单（带教/悬案/废弃标记） |
 | `scripts/` `assets/` | 全部自动化脚本；自动战斗模板图 |
 | 专家包 `wx-minigame-operator` | 角色纪律：开局协议/致命五坑/熔断/红线/收尾 |
 
 ## 执行规则
 
-1. **禁止把 Read 显示图上量出的坐标直接当点击坐标**。显示图是缩放图（实测系数 ≈0.40）。唯一方法：显示图量值 ÷ 显示图尺寸 × 实际 PNG 尺寸，或探针扫色块边界，或用档案已验证值。
+1. **坐标一律是设计坐标（基准 1138×708），禁止把 Read 显示图上量出的像素直接当点击坐标**。显示的截图是缩放图（实测系数 ≈0.40）。唯一方法：显示图量值 ÷ 显示图尺寸 × 1138/708，或探针扫色块边界，或用档案已验证值；脚本运行时会自动换算到实时客户区。
 2. **自动战斗判定=左上角按钮文字模板匹配**（唯一判据，铁律第2条）：「自动战斗」(关,▶) /「取消自动」(开,⏸)，模板 `assets\btn_auto_*.png`，白色掩码 Jaccard ≤0.60+边距 ≥0.10（交叉距离实测 0.758）。与血量/白字 tip/按钮底色零关系（事件10/11，见 `incidents.md`；**tip 判定代码 2026-10-25 已彻底删除——模板读不出→FAIL 人工核对，严禁用 tip 噪声兜底放行**）。同角色登录期间换图保持，切角色必重置。wxclick `auto`：模板 OFF+连续 5 轮一致才点 (224,181)，上限 2 次；**AUTO_ENSURE_FAIL→截图人工核对按钮，视觉=关→新进程再试（最多2轮），视觉=开→继续，看不清→问用户**。
 3. 「开启冥渊」点击后必须确认按钮文字已变「冥渊模式」。
 4. 重登/重开后选中角色重置，点「开始游戏」前确认金色选中框在目标角色上。
@@ -39,11 +39,11 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | | 公司电脑 | 个人电脑 |
 |---|---|---|
 | 屏幕/DPI | （建 skill 时基准） | 2560×1440 @125% |
-| 坐标体系 | DPI-unaware 窗口相对坐标 + 固定补偿 | DPI-aware 客户区物理坐标 1:1 |
+| 坐标体系 | DPI-unaware 窗口相对坐标 + 固定补偿 | 设计坐标 1138×708 + 运行时等比换算（DPI-aware） |
 | 脚本 | `wxclick.ps1`/`wxfarm.ps1`（存档不可用） | `*-personal.ps1` |
 | 坐标档案 | `coords-company.md`（存档） | `coords-personal.md` |
 
-- 游戏 UI 等比布局：跨机换算 = 档案比例 × 当前客户区尺寸，首用前截图核对。客户区**尺寸**变化需核对，窗口移动不影响（脚本实时读原点）。
+- 游戏 UI 严格等比缩放（用户实机确认）：档案坐标 = 设计坐标，脚本按 `S=min(W/1138,H/708)` + 居中留边自动换算；同比例改窗口/换副本的 1-3px 尺寸波动无需处理，窗口移动也不影响（脚本实时读原点）。**长宽比偏差 >1.2% 才停机**（防非等比拉伸/窗口异常）。
 
 ## 1. 定位目标窗口
 
@@ -53,7 +53,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 ## 2. 坐标校准
 
-个人电脑物理坐标 1:1 无补偿。**⚠️ Read 显示图是缩放图（≈0.40），显示图上的绝对数字严禁直接当物理坐标。** 比例归一化误差 ≤2px。
+个人电脑用**设计坐标 1138×708**：档案/坐标表数字直接传入脚本，`_wxcommon` 按实时客户区等比换算（含居中留边），误差 ≤1px。**⚠️ Read 显示图是缩放图（≈0.40），显示图上的绝对数字严禁直接当点击坐标。** 截图（`wxshot` 锚定模式）已归一化到设计尺寸，图内像素可直接与坐标表对照。
 
 公司电脑（存档）：点安全空白点 → 截图看光标落点 → delta 补偿，|delta|≤8 可忽略。
 
@@ -97,19 +97,19 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxlogin-personal.ps1` | 固化登录链（已接入 CHAR 探针金框自动验证；GOLD_DIALOG 默认停机防顶号误点，目验挂机/已授权后加 -AssumeGold） | `-Char 1..6 -AssumeGold` |
 | `wxclaim-personal.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke-personal.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
-| `wxautostate-personal.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线） | `-Pid2 -Img` |
-| `_wxcommon.ps1` | **公共库（单一真相源）**：配置常量（定版尺寸/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、尺寸断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress |
+| `wxautostate-personal.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocrbtn OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
+| `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress |
 | `wxregress-personal.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox-personal.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin-personal.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
 | `wxpopup-personal.ps1` | **弹窗分类器**：挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/无/未知(红线停)，金确定钮守卫+正文模板 | `-Pid2 -Img` |
 | `wxstam-personal.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
-| `wxresize-personal.ps1` | **尺寸漂移复位**：强制客户区回定版 1138×708（最小化/最大化先还原，实测 chrome 差值换算外框），复位后无需重标定；禁设其它尺寸 | `-Pid2` |
+| `wxresize-personal.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
 | `wxrecrop-personal.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress | `-ImgOff -ImgOn` |
 | `wxnav-tower-personal.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
-| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore` | 截图/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台 | 见脚本头 |
+| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxocrbtn-personal` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/OCR 按钮文字二次意见（Windows 自带 zh-Hans 引擎，仅判定「自动战斗/取消自动」） | 见脚本头 |
 | `wxfarm-personal.ps1` | 旧版扫描循环，**已被 wxgrind 替代，仅存档** | — |
-| `wxclick.ps1`/`wxfarm.ps1`/`wxscroll`/`wxwait` | 公司电脑/Trae 遗产存档 | — |
+| `wxclick.ps1`/`wxfarm.ps1`/`wxwait` | 公司电脑/Trae 遗产存档 | — |
 
 探针状态动作：`GOLD_DIALOG`→按专家红线处理；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`LOGIN_PAGE`→点 (571,527)；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`UNKNOWN`→人工截图。
 
@@ -119,7 +119,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 ## 7. 像素探针原理
 
-结算按钮暗红：`R>100 且 R-B>50 且 22<G<78`；扫描带 BX=915、y 225~445，红块起始 y+20 为点击点（面板 Y 浮动 ±45px，禁写死）。自动战斗=按钮文字模板匹配（§执行规则2），模板绑定客户区 **1146×711**（事件19 后重裁）——尺寸变化→UNKNOWN→安全停机→**重裁模板**（非可忽略项）。改阈值前先 `wxautostate -Debug`/`-Img` 采样；按钮 RGB 实测数据见 `coords-personal.md`。
+结算按钮暗红：`R>100 且 R-B>50 且 22<G<78`；扫描带 BX=915、y 225~445，红块起始 y+20 为点击点（面板 Y 浮动 ±45px，禁写死）。自动战斗=按钮文字模板匹配（§执行规则2），模板绑定**设计尺寸 1138×708**——客户区同比例变化由运行时等比换算+截图归一化吸收，**不再需要重裁**；仅当同比例下持续 UNKNOWN（真实布局重排）才走 wxrecrop。改阈值前先 `wxautostate -Debug`/`-Img` 采样；按钮 RGB 实测数据见 `coords-personal.md`。
 
 ## 8. 低延迟执行
 
@@ -155,8 +155,8 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | CopyFromScreen 报「句柄无效」 | 屏幕锁定/会话切走 | 停手；用户解锁后自愈，恢复后再核状态 |
 | 截图是纯色 4~5KB | 锁屏/遮挡/最小化（事件14 复盘定论，非渲染假死） | wxprobe=OCCLUDED / wxshot WARN 已自动识别；解锁+wxrestore 后重截，仍异常停手问用户 |
 | 点击落进用户其它窗口 | SetForegroundWindow 被前台锁拦截 | wxclick/wxpoke 已带前台守卫（拒点）；复现→停手 |
-| 按钮模板全 UNKNOWN（dist 双高） | 客户区尺寸变化/按钮被遮挡/特效扫过 | wxshot 人工核对；尺寸变了重裁模板 |
-| 脚本报 `ERR: client=… 与定版尺寸 1138x708 不符` | 窗口尺寸被改动/最小化恢复重排（±1px 级漂移实测存在） | 先跑 `wxresize-personal.ps1` 复位定版尺寸（复位后无需重标定）；若画面布局明显错乱→停止并与用户确认重标 |
+| 按钮模板全 UNKNOWN（dist 双高） | 按钮被遮挡/特效扫过/真实布局重排 | wxshot 人工核对；同比例尺寸下仍持续 UNKNOWN 才重裁模板（单纯尺寸变化已由换算吸收） |
+| 脚本报 `ERR: client=… 长宽比/缩放系数不符` | 窗口被拉成非设计比例、过大过小或尺寸读取异常 | 跑 `wxresize-personal.ps1` 复位（同比例任意尺寸均可，日常无需复位）；仍异常→停止问用户，不要改设计基准常量迁就窗口 |
 | 点了没反应、光标不在预期位置 | delta 失效/窗口被移动 | 重新校准（读最新 origin） |
 | 光标在按钮上没反应 | 热区偏移 | 下移 +30~50px 重试一次 |
 | 首点无效之后正常 | 首点只激活窗口 | 先点标题栏聚焦 |

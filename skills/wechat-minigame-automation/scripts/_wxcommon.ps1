@@ -3,13 +3,16 @@
 # 所有画面交互脚本 dot-source 本文件，禁止再在脚本内复制 P/Invoke 样板或区域常量。
 # 修改本文件 = 修改全部脚本的共同行为；改动后必须跑 wxregress-personal.ps1 离线回归。
 
-# ---- 配置区（定版常量，改动须用户确认并同步 coords-personal.md）----
-$WX_CLIENT_W = 1138                 # 客户区定版尺寸（2026-10-25 用户定版）
-$WX_CLIENT_H = 708
+# ---- 配置区（设计坐标系，改动须用户确认并同步 coords-personal.md）----
+# 设计坐标系：文档/区域常量/模板均以 1138x708 为基准，运行时由 Get-ClientGeometry 换算到实时屏幕。
+$WX_DESIGN_W = 1138                 # 设计基准尺寸（2026-10-25 用户定版，布局严格等比）
+$WX_DESIGN_H = 708
+$WX_CLIENT_W = $WX_DESIGN_W         # 兼容旧名，含义等同设计基准
+$WX_CLIENT_H = $WX_DESIGN_H
 $WX_WINDOW_TITLE = '勇士之心'        # 窗口标题匹配针
-$WX_BTN_X0 = 195; $WX_BTN_Y0 = 175  # 自动战斗按钮文字区（wxwhitebox 实测，1138x708 布局）
+$WX_BTN_X0 = 195; $WX_BTN_Y0 = 175  # 自动战斗按钮文字区（wxwhitebox 实测，设计坐标）
 $WX_BTN_X1 = 253; $WX_BTN_Y1 = 187
-$WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # 按钮点击点
+$WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # 按钮点击点（设计坐标）
 
 if (-not ('WXCommon' -as [type])) {
 Add-Type -TypeDefinition @'
@@ -82,19 +85,99 @@ function Find-GameWindow {
     return [WXCommon]::Fallback
 }
 
-# ---- 客户区几何：读尺寸+原点；默认断言 ±2px 容差（1136-1140×706-710），诊断用途传 -NoAssert ----
-# 容差依据（2026-10-25 晚实测 3/3）：「再来一次」进图转换会确定性触发 WeChatAppEx 重申记忆几何
-# （1138→1139），模板 dist 双 0、导航断言、点击热区在两个宽度下均正常——1px 级不构成布局重排
-# （事件19 的 8px 教训不适用于此量级）。超 ±2px 仍停机；复位用 wxresize-personal.ps1。
+# ---- 客户区几何：读尺寸+原点，并给出设计坐标→屏幕的换算参数 ----
+# 设计基准 1138x708；游戏布局严格等比（用户 2026-10-26 确认）。换副本时客户区会有 1-3px 级变化，
+# 由 S（统一缩放）与 OFFX/OFFY（居中留边）吸收，不再要求精确复位。
+# 仅当长宽比偏差 >1.2% 或缩放越界时停机（防窗口异常/非等比拉伸）；维护工具传 -Exact 要求精确定版。
 function Get-ClientGeometry {
-    param([IntPtr]$h, [switch]$NoAssert)
+    param([IntPtr]$h, [switch]$NoAssert, [switch]$Exact)
     $cr = New-Object WXCommon+RECT; [WXCommon]::GetClientRect($h, [ref]$cr) | Out-Null
     $pt = New-Object WXCommon+POINT; $pt.X = 0; $pt.Y = 0; [WXCommon]::ClientToScreen($h, [ref]$pt) | Out-Null
-    if (-not $NoAssert -and ([math]::Abs($cr.R - $WX_CLIENT_W) -gt 2 -or [math]::Abs($cr.B - $WX_CLIENT_H) -gt 2)) {
-        Write-Output "ERR: client=$($cr.R)x$($cr.B) 与定版尺寸 $($WX_CLIENT_W)x$($WX_CLIENT_H) 偏差超 ±2px，停机请用户核对窗口尺寸（可先试 wxresize-personal.ps1 复位）"
-        exit 8
+    $sx = $cr.R / $WX_DESIGN_W
+    $sy = $cr.B / $WX_DESIGN_H
+    $s = [math]::Min($sx, $sy)
+    if (-not $NoAssert) {
+        if ($Exact -and ($cr.R -ne $WX_DESIGN_W -or $cr.B -ne $WX_DESIGN_H)) {
+            Write-Output "ERR: client=$($cr.R)x$($cr.B) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize-personal.ps1）"
+            exit 8
+        }
+        if ([math]::Abs($sx - $sy) -gt 0.012) {
+            Write-Output "ERR: client=$($cr.R)x$($cr.B) 长宽比与设计基准偏差过大，停机请用户核对窗口"
+            exit 8
+        }
+        if ($s -lt 0.75 -or $s -gt 2.0) {
+            Write-Output "ERR: client=$($cr.R)x$($cr.B) 缩放系数 $([math]::Round($s,3)) 超出 0.75-2.0，停机请用户核对窗口"
+            exit 8
+        }
     }
-    [pscustomobject]@{ W = $cr.R; H = $cr.B; OX = $pt.X; OY = $pt.Y }
+    $offX = ($cr.R - $WX_DESIGN_W * $s) / 2
+    $offY = ($cr.B - $WX_DESIGN_H * $s) / 2
+    [pscustomobject]@{ W = $cr.R; H = $cr.B; OX = $pt.X; OY = $pt.Y; S = $s; SX = $sx; SY = $sy; OFFX = $offX; OFFY = $offY }
+}
+
+# ---- 设计坐标 → 屏幕坐标（点击/采样前调用）----
+function ConvertTo-ScreenPoint {
+    param($g, [int]$x, [int]$y)
+    [pscustomobject]@{
+        X = [int][math]::Round($g.OX + $g.OFFX + $x * $g.S)
+        Y = [int][math]::Round($g.OY + $g.OFFY + $y * $g.S)
+    }
+}
+
+# ---- 屏幕坐标 → 设计坐标（诊断/截图标定用）----
+function ConvertFrom-ScreenPoint {
+    param($g, [int]$x, [int]$y)
+    [pscustomobject]@{
+        X = [int][math]::Round(($x - $g.OX - $g.OFFX) / $g.S)
+        Y = [int][math]::Round(($y - $g.OY - $g.OFFY) / $g.S)
+    }
+}
+
+# ---- 最近邻缩放：保留原始 RGB，避免插值灰度污染色彩阈值与白掩码 ----
+function Resize-WxBitmapNearest {
+    param([System.Drawing.Bitmap]$src, [int]$w, [int]$h)
+    if ($src.Width -eq $w -and $src.Height -eq $h) { return $src }
+    $dst = New-Object System.Drawing.Bitmap $w, $h
+    $gr = [System.Drawing.Graphics]::FromImage($dst)
+    $gr.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+    $gr.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+    $gr.DrawImage($src, (New-Object System.Drawing.Rectangle 0, 0, $w, $h))
+    $gr.Dispose()
+    return $dst
+}
+
+# ---- 实时抓图并归一化回设计尺寸：后续像素判定/模板匹配零改动 ----
+function Get-DesignBitmap {
+    param($g, [switch]$Raw)
+    $vw = [int][math]::Round($WX_DESIGN_W * $g.S)
+    $vh = [int][math]::Round($WX_DESIGN_H * $g.S)
+    $cx = [int][math]::Round($g.OFFX)
+    $cy = [int][math]::Round($g.OFFY)
+    $src = New-Object System.Drawing.Bitmap $vw, $vh
+    $gr = [System.Drawing.Graphics]::FromImage($src)
+    $gr.CopyFromScreen($g.OX + $cx, $g.OY + $cy, 0, 0, (New-Object System.Drawing.Size $vw, $vh))
+    $gr.Dispose()
+    if ($Raw) { return $src }
+    $dst = Resize-WxBitmapNearest $src $WX_DESIGN_W $WX_DESIGN_H
+    if (-not [object]::ReferenceEquals($dst, $src)) { $src.Dispose() }
+    return $dst
+}
+
+# ---- 抓取设计坐标区域并归一化到该区域设计尺寸（自动战斗按钮等小区域用）----
+function Get-DesignRegion {
+    param($g, [int]$x0, [int]$y0, [int]$x1, [int]$y1)
+    $dw = $x1 - $x0 + 1; $dh = $y1 - $y0 + 1
+    $sw = [math]::Max(1, [int][math]::Round($dw * $g.S))
+    $sh = [math]::Max(1, [int][math]::Round($dh * $g.S))
+    $sx = [int][math]::Round($g.OFFX + $x0 * $g.S)
+    $sy = [int][math]::Round($g.OFFY + $y0 * $g.S)
+    $src = New-Object System.Drawing.Bitmap $sw, $sh
+    $gr = [System.Drawing.Graphics]::FromImage($src)
+    $gr.CopyFromScreen($g.OX + $sx, $g.OY + $sy, 0, 0, (New-Object System.Drawing.Size $sw, $sh))
+    $gr.Dispose()
+    $dst = Resize-WxBitmapNearest $src $dw $dh
+    if (-not [object]::ReferenceEquals($dst, $src)) { $src.Dispose() }
+    return $dst
 }
 
 # ---- 资产目录（包内相对定位，禁止绝对路径）----

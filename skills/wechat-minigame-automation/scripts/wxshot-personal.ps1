@@ -1,8 +1,9 @@
-﻿param([string]$Out = "$env:TEMP\wrx\shot.png", [int]$OX = -1, [int]$OY = 180, [int]$W = -1, [int]$H = -1, [int]$Pid2 = 0, [switch]$Grid)
-# 个人电脑版客户端区截图（DPI-aware 物理像素），供视觉确认画面状态
+﻿param([string]$Out = "$env:TEMP\wrx\shot.png", [int]$OX = -1, [int]$OY = 180, [int]$W = -1, [int]$H = -1, [int]$Pid2 = 0, [switch]$Grid, [switch]$Raw)
+# 个人电脑版客户端区截图（设计坐标，基准 1138x708），供视觉确认画面状态
 # 两种定位模式：
 #   -OX >= 0：绝对屏幕坐标模式（OX/OY/W/H = 屏幕绝对值，窗口挪动后过期——不推荐）
-#   -OX  < 0：窗口锚定模式（推荐）——按标题「勇士之心」匹配窗口，自动取客户区原点与尺寸
+#   -OX  < 0：窗口锚定模式（推荐）——按标题匹配窗口，抓图并归一化到设计尺寸；
+#            输出图内坐标=设计坐标，可与 coords-personal.md 直接对照。-Raw 保留实时尺寸（诊断缩放用）
 #            （2026-10-25 根因更正：历史"H=怪值"真凶=PowerShell 变量大小写不敏感，$h 句柄与 $H 参数同名冲突；
 #              并非「多窗口选错」——wxenumwin 实测该 pid 仅一个可见窗口。修法=句柄改名 $hwnd）
 # 纯色画面警告：最小化/遮挡/锁屏时 CopyFromScreen 抓到整屏纯色（事件4/15），打 WARN 提示先 wxrestore
@@ -12,15 +13,15 @@ if ($OX -lt 0) {
     $hwnd = Find-GameWindow -Pid2 $Pid2
     if ($hwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     $geo = Get-ClientGeometry $hwnd -NoAssert   # 诊断工具：只报尺寸不强断言
-    $OX = $geo.OX; $OY = $geo.OY
-    if ($W -le 0) { $W = $geo.W }
-    if ($H -le 0) { $H = $geo.H }
-    "anchored origin=$OX,$OY size=${W}x$H"
+    $b = Get-DesignBitmap $geo -Raw:$Raw
+    $W = $b.Width; $H = $b.Height
+    "anchored origin=$($geo.OX),$($geo.OY) size=${W}x$H scale=$([math]::Round($geo.S,4))$(if ($Raw) { ' raw' } else { ' design' })"
+} else {
+    $b = New-Object System.Drawing.Bitmap $W, $H
+    $g = [System.Drawing.Graphics]::FromImage($b)
+    $g.CopyFromScreen($OX, $OY, 0, 0, (New-Object System.Drawing.Size $W, $H))
+    $g.Dispose()
 }
-$b = New-Object System.Drawing.Bitmap $W, $H
-$g = [System.Drawing.Graphics]::FromImage($b)
-$g.CopyFromScreen($OX, $OY, 0, 0, (New-Object System.Drawing.Size $W, $H))
-$g.Dispose()
 # 纯色守卫（事件4/15）：整屏同色=画面不可信
 $distinct = @{}
 for ($yy = 0; $yy -lt $b.Height; $yy += 40) { for ($xx = 0; $xx -lt $b.Width; $xx += 40) {

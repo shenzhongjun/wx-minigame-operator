@@ -1,10 +1,10 @@
 ﻿param([int]$Pid2 = 0, [int]$ClientW = 0, [int]$ClientH = 0)
-# wxresize-personal.ps1 - 强制客户区回定版尺寸（2026-10-25 新增，简报-窗口尺寸调整 实现）
-# 用途：WeChatAppEx 最小化恢复/系统行为会导致客户区 ±1px 级漂移（1138→1139 实测），
-#       本脚本把客户区强制设回定版尺寸，尺寸断言恢复放行，无需任何重标定。
-# 原理：定位窗口 → 最小化/最大化先还原 → AdjustWindowRect 客户区→外框换算 → SetWindowPos → 回读校验
-# 参数：-Pid2 0=按标题自动发现；-ClientW/-ClientH 缺省用 _wxcommon 定版值
-# 注意：只允许设回定版尺寸（±2px 内算成功）；改到其它尺寸=模板/坐标全失效，禁止
+# wxresize-personal.ps1 - 把客户区复位到设计基准尺寸（2026-10-25 新增；2026-10-26 改为可选工具）
+# 用途：相对坐标体系下已支持等比缩放，本脚本仅用于异常恢复/人工想回到 1138x708 时使用。
+#       也可指定其它同比例尺寸（例如 1252x779）做缩放验证。
+# 原理：定位窗口 → 最小化/最大化先还原 → 实测 chrome 差值 → SetWindowPos → 回读校验
+# 参数：-Pid2 0=按标题自动发现；-ClientW/-ClientH 缺省用设计基准值
+# 注意：目标尺寸必须与设计基准同长宽比（±1.2%），否则坐标换算不成立
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 
 $hwnd = Find-GameWindow -Pid2 $Pid2
@@ -14,11 +14,11 @@ $geo = Get-ClientGeometry $hwnd -NoAssert
 
 $tw = if ($ClientW -gt 0) { $ClientW } else { $WX_CLIENT_W }
 $th = if ($ClientH -gt 0) { $ClientH } else { $WX_CLIENT_H }
-if ($tw -ne $WX_CLIENT_W -or $th -ne $WX_CLIENT_H) {
-    "ERR: 目标尺寸 ${tw}x${th} ≠ 定版 $($WX_CLIENT_W)x$($WX_CLIENT_H)，改其它尺寸=全套标定作废，禁止。退出"
+if ([math]::Abs(($tw / $WX_DESIGN_W) - ($th / $WX_DESIGN_H)) -gt 0.012) {
+    "ERR: 目标尺寸 ${tw}x${th} 与设计基准 $($WX_DESIGN_W)x$($WX_DESIGN_H) 长宽比不符，坐标换算不成立。退出"
     exit 3
 }
-if ($geo.W -eq $tw -and $geo.H -eq $th) { "ALREADY: 客户区已是定版尺寸，无需调整"; exit 0 }
+if ($geo.W -eq $tw -and $geo.H -eq $th) { "ALREADY: 客户区已是目标尺寸，无需调整"; exit 0 }
 
 if ([WXCommon]::IsIconic($hwnd)) { [WXCommon]::ShowWindow($hwnd, 9) | Out-Null; Start-Sleep -Milliseconds 500; "restored from minimized" }
 if ([WXCommon]::IsZoomed($hwnd)) { [WXCommon]::ShowWindow($hwnd, 9) | Out-Null; Start-Sleep -Milliseconds 500; "restored from maximized" }
@@ -39,7 +39,7 @@ Start-Sleep -Milliseconds 800
 $geo2 = Get-ClientGeometry $hwnd -NoAssert
 "after: client=$($geo2.W)x$($geo2.H) origin=$($geo2.OX),$($geo2.OY) (target ${tw}x${th})"
 if ([math]::Abs($geo2.W - $tw) -le 2 -and [math]::Abs($geo2.H - $th) -le 2) {
-    "RESIZE_OK: 客户区已回到定版尺寸±2px，尺寸断言恢复放行，无需重标定"
+    "RESIZE_OK: 客户区已回到目标尺寸±2px（相对坐标自动换算，无需重标定）"
     exit 0
 }
 "RESIZE_MISMATCH: 回读 $($geo2.W)x$($geo2.H) 与目标 ${tw}x${th} 差超 2px（DPI 取整/窗口样式异常），人工检查"

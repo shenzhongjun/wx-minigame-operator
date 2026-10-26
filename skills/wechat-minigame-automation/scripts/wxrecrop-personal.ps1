@@ -2,7 +2,8 @@
 # wxrecrop-personal.ps1 - 自动战斗模板重裁一条龙（体系重打磨 P5，2026-10-25）
 # 场景：窗口尺寸主动变更/布局重排后，按钮文字区漂移——原流程手工 wxwhitebox+wxcrop+四处同步，
 #       本脚本一条命令完成：自动求 bbox → 备份旧模板 → 裁新双模板 → 更新 _wxcommon 配置 → 离线验证
-# 前提：两张实拍截图（-ImgOff 按钮为「自动战斗」关态 / -ImgOn 为「取消自动」开态），完整客户区 PNG
+# 前提：两张实拍截图（-ImgOff 按钮为「自动战斗」关态 / -ImgOn 为「取消自动」开态），完整客户区 PNG；
+#       非设计尺寸会自动最近邻归一化到 1138x708，模板始终落在设计坐标系
 # 安全：任何一步失败自动回滚（模板与 _wxcommon 均先备份）；完成后必须跑 wxregress-personal.ps1 全过才算交付
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 $ErrorActionPreference = 'Stop'
@@ -10,9 +11,19 @@ if ($ImgOff -eq "" -or $ImgOn -eq "" -or -not (Test-Path $ImgOff) -or -not (Test
     "ERR: 需提供 -ImgOff <关态截图> -ImgOn <开态截图>（完整客户区 PNG）"; exit 4
 }
 
+# --- 0. 输入统一归一化到设计尺寸 ---
+function Load-DesignBmp([string]$img) {
+    $b = New-Object System.Drawing.Bitmap $img
+    if ($b.Width -eq $WX_DESIGN_W -and $b.Height -eq $WX_DESIGN_H) { return $b }
+    $n = Resize-WxBitmapNearest $b $WX_DESIGN_W $WX_DESIGN_H
+    if (-not [object]::ReferenceEquals($n, $b)) { $b.Dispose() }
+    return $n
+}
+$bmpOff = Load-DesignBmp $ImgOff
+$bmpOn  = Load-DesignBmp $ImgOn
+
 # --- 1. 白像素行剖面 → 分组 → 取最底部一组=文字行（图标在文字上方，二者间有空隙）---
-function Get-TextRegion([string]$img) {
-    $bmp = New-Object System.Drawing.Bitmap $img
+function Get-TextRegion([System.Drawing.Bitmap]$bmp) {
     $rows = @{}
     for ($y = $SearchY0; $y -le $SearchY1; $y++) {
         $cnt = 0; $minX = 999999; $maxX = -1
@@ -22,7 +33,6 @@ function Get-TextRegion([string]$img) {
         }
         if ($cnt -gt 0) { $rows[$y] = @($minX, $maxX) }
     }
-    $bmp.Dispose()
     if ($rows.Count -eq 0) { return $null }
     # 行分组：相邻白行间隔 >2 视为断开
     $ys = $rows.Keys | Sort-Object
@@ -42,8 +52,8 @@ function Get-TextRegion([string]$img) {
     return @($minX, $y0, $maxX, $y1)
 }
 
-$regOff = Get-TextRegion $ImgOff
-$regOn  = Get-TextRegion $ImgOn
+$regOff = Get-TextRegion $bmpOff
+$regOn  = Get-TextRegion $bmpOn
 if ($null -eq $regOff -or $null -eq $regOn) { "ERR: 未找到按钮文字白像素"; exit 4 }
 "Off 文字区: $($regOff -join ',')  On 文字区: $($regOn -join ',')"
 if ([math]::Abs($regOff[0]-$regOn[0]) -gt 3 -or [math]::Abs($regOff[1]-$regOn[1]) -gt 3 -or [math]::Abs($regOff[2]-$regOn[2]) -gt 3 -or [math]::Abs($regOff[3]-$regOn[3]) -gt 3) {
@@ -62,17 +72,17 @@ $commonPath = Join-Path $PSScriptRoot '_wxcommon.ps1'
 Copy-Item $commonPath "$commonPath.bak" -Force
 "backed up: btn_auto_*.png.bak-$stamp + _wxcommon.ps1.bak"
 
-# --- 3. 裁新模板（1:1）---
-function Save-Crop([string]$img, [int]$a, [int]$b, [int]$c, [int]$d, [string]$out) {
-    $src = New-Object System.Drawing.Bitmap $img
+# --- 3. 裁新模板（设计尺寸 1:1）---
+function Save-Crop([System.Drawing.Bitmap]$src, [int]$a, [int]$b, [int]$c, [int]$d, [string]$out) {
     $w = $c - $a + 1; $h = $d - $b + 1
     $dst = New-Object System.Drawing.Bitmap $w, $h
     $g = [System.Drawing.Graphics]::FromImage($dst)
     $g.DrawImage($src, (New-Object System.Drawing.Rectangle 0, 0, $w, $h), (New-Object System.Drawing.Rectangle $a, $b, $w, $h), [System.Drawing.GraphicsUnit]::Pixel)
-    $g.Dispose(); $dst.Save($out); $src.Dispose(); $dst.Dispose()
+    $g.Dispose(); $dst.Save($out); $dst.Dispose()
 }
-Save-Crop $ImgOff $x0 $y0 $x1 $y1 "$assets\btn_auto_off.png"
-Save-Crop $ImgOn  $x0 $y0 $x1 $y1 "$assets\btn_auto_on.png"
+Save-Crop $bmpOff $x0 $y0 $x1 $y1 "$assets\btn_auto_off.png"
+Save-Crop $bmpOn  $x0 $y0 $x1 $y1 "$assets\btn_auto_on.png"
+$bmpOff.Dispose(); $bmpOn.Dispose()
 "templates saved: btn_auto_off/on.png ($($x1-$x0+1)x$($y1-$y0+1))"
 
 # --- 4. 更新 _wxcommon 配置区常量（String.Replace 字面量替换——-replace 的替换串会展开变量，实测教训）---
@@ -96,7 +106,7 @@ if ($offOk -and $onOk) {
     "RECROP_OK: 模板+常量已更新并验证通过。收尾三件事："
     "  1. 跑 wxregress-personal.ps1 全量回归（必须全过）"
     "  2. 更新 coords-personal.md 按钮判定源登记（新文字区 $x0,$y0-$x1,$y1）"
-    "  3. 若本次是配合窗口尺寸变更：确认 _wxcommon 的 WX_CLIENT_W/H 已同步新尺寸"
+    "  3. 相对坐标体系下无需同步窗口尺寸；仅当设计基准本身变更时才改 WX_DESIGN_W/H"
     exit 0
 }
 # --- 回滚 ---

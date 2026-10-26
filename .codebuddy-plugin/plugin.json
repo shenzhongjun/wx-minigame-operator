@@ -1,6 +1,6 @@
 {
   "name": "wx-minigame-operator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Yongshi Zhixin (WeChat mini-game) desktop automation operator. Enforces opening protocol, circuit breaker, and safety red lines; reads the operation manual (skill) before acting.",
   "author": {
     "name": "zhouyijie"
