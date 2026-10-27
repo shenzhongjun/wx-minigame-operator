@@ -18,7 +18,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/coords.md` | 纯坐标与标定（坐标表/缩放/像素判定/探针校准） |
 | `references/features/dungeon-runs.md` | 副本刷取流程（冥渊/圣殿/航路） |
 | `references/features/daily-claim.md` | 每日领体力流程 |
-| `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/每日循环/角色现状） |
+| `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/每日循环；角色分工看 tasks.md） |
 | `references/update-log.md` | 踩坑/优化流水缓冲区 |
 | `references/incidents.md` | 事件根因档案（事件1-19） |
 | `references/todo-scripts.md` | 待办清单（带教/悬案/废弃标记） |
@@ -30,7 +30,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 1. **坐标一律是设计坐标（基准 1138×708），禁止把 Read 显示图上量出的像素直接当点击坐标**。显示的截图是缩放图（实测系数 ≈0.40）。唯一方法：显示图量值 ÷ 显示图尺寸 × 1138/708，或探针扫色块边界，或用档案已验证值；脚本运行时会自动换算到实时客户区。
 2. **自动战斗判定=左上角按钮文字模板匹配**（唯一判据，铁律第2条）：「自动战斗」(关,▶) /「取消自动」(开,⏸)，模板 `assets\btn_auto_*.png`，白色掩码 Jaccard ≤0.60+边距 ≥0.10（交叉距离实测 0.758）。与血量/白字 tip/按钮底色零关系（事件10/11，见 `incidents.md`；**tip 判定代码 2026-10-25 已彻底删除——模板读不出→FAIL 人工核对，严禁用 tip 噪声兜底放行**）。同角色登录期间换图保持，切角色必重置。wxclick `auto`：模板 OFF+连续 5 轮一致才点 (224,181)，上限 2 次；**AUTO_ENSURE_FAIL→截图人工核对按钮，视觉=关→新进程再试（最多2轮），视觉=开→继续，看不清→问用户**。
 3. 「开启冥渊」点击后必须确认按钮文字已变「冥渊模式」。
-4. 重登/重开后选中角色重置，点「开始游戏」前确认金色选中框在目标角色上。
+4. 重登/重开后选中角色**重置为第1个**（事件5）；同会话再进选角页则停在「上次选中角色所在屏」（2026-10-27 实证）。选中态 OCR 判不了——选卡一律走 wxcharsel 幂等双击，勿再提金框验证（已退役，2026-10-27 用户定版：身份确认永久不做）。
 5. 窗口遮挡：置顶面板脚本管不了，点左侧按钮前截图确认完整，被挡请用户清开。
 6. 角色死亡弹「是否使用不死鸟羽毛」→ 点「立即复活」(722,516)（已授权）。
 
@@ -82,13 +82,13 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxdoclint.ps1` | **文档维护后校验**（§13 维护流程必跑） | 见脚本头 |
 | `wxpreflight.ps1` | **开局协议预检：校验档案齐全+打印要点摘要** | 无参数 |
 | `wxgrind.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
-| `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto=模板判定+gated 双击+前台守卫 | `-Pid2 -J` |
+| `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto=模板判定+gated 双击+前台守卫（±J 扰动参数已删，v1.1.7） | `-Pid2` |
 | `wxprobe.ps1` | 状态探针（战斗/结算/弹窗/遮挡粗信号；2026-10-27 TOWN/LOGIN 身份判据退役→OCR `town`/`server`） | `-Pid2 -Debug` |
 | `wxlogin.ps1` | 固化登录链 v3（2026-10-27 拆分定版：只管登录）：GOLD_DIALOG 先 wxpopup OCR 分类——POPUP_IDLE（挂机）自动点确定重登，其余类别（顶号/涉钱/未知）红线停机；登录页进入游戏→OCR 确认选角页**即止**（角色选择移交 wxcharsel；旧卡表 5/6=(139/414,536) 已删——(139,536) 实为翻页按钮） | `-AssumeGold` |
 | `wxcharsel.ps1` | **选角专职（2026-10-27 新增，卡表单源）**：起始态自适应进选角页（主城点「选角」带3次重试）→ scr1w/scr2w 判屏 → 按需切屏复核 → 幂等双击目标卡；`-StartGame` 进游戏+town 终态确认，默认停选角页。卡表 1(138,342) 2(421,342) 3(704,340) 4(987,340) 5(138,370) 6(421,370)；7/8 锁槽红线禁点 | `-Char 1..6 -StartGame` |
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
-| `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocrbtn OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
+| `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocr autobtn 任务 OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
 | `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
 | `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
@@ -98,10 +98,10 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxresize.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
 | `wxrecrop.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
 | `wxnav-tower.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
-| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxocrbtn/wxwait/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/OCR 按钮文字二次意见（Windows 自带 zh-Hans 引擎，仅判定「自动战斗/取消自动」）/轮询等待指定状态/枚举窗口/文档规则校验 | 见脚本头 |
+| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxwait/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/轮询等待指定状态/枚举窗口/文档规则校验（~~wxocrbtn~~ 已删，v1.1.3 并入 wxocr） | 见脚本头 |
 | ~~`wxfarm.ps1`~~ | **已删除（2026-10-26 用户裁决）**：未迁移设计坐标体系（裸屏幕数学，窗口≠1138×708 必错位），且功能已被 wxgrind -AutoRetry 覆盖 | — |
 
-探针状态动作：`GOLD_DIALOG`→按专家红线处理；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`LOGIN_PAGE`→点 (571,527)；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`UNKNOWN`→人工截图。
+探针状态动作：`GOLD_DIALOG`→按专家红线处理；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`UNKNOWN`→人工截图（主城/登录页/选角页 UNKNOWN 属预期——页面身份以 OCR 为准，v1.1.5 定版）。
 
 **硬性路径约束：本 skill 随专家包安装，所有脚本只准写进本 skill 目录下的 `scripts\`（实际安装路径未知时，先跑 preflight 或 Glob 搜 `wxpreflight.ps1` 定位，绝不凭记忆猜路径），严禁 Temp/临时目录**
 
@@ -159,7 +159,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 ## 12. 新增副本/任务的标准动作
 
-1. 查 `coords-*.md`：有记录直接照跑；没有 → 截图定位入口，wxclick 连招进图，探针确认状态，坐标流程写入档案。
+1. 查 `coords.md`：有记录直接照跑；没有 → 截图定位入口，wxclick 连招进图，探针确认状态，坐标流程写入档案。
 2. 用户原话的任务分配先写入 `tasks.md` 再执行。
 3. 任务结束回报场次/体力/邀请函/金币，同步档案；踩坑按 `update-log.md` 路由。
 
