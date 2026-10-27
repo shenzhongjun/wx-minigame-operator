@@ -107,38 +107,16 @@ $dOn  = [math]::Round((Get-WxJaccard $live $tpl.On), 3)
 $dOff = [math]::Round((Get-WxJaccard $live $tpl.Off), 3)
 $btnMatch = (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10))
 
-# 选角页金框检测（惰性计算 2026-10-25 晚）：仅非战斗(无按钮匹配)/非结算/非金弹窗页才算，
-# 战斗与结算页跳过 ~3.5 万次 GetPixel，探针耗时降 ~70%（提频轮询的前提）。
-# 标定：选中卡条带 61~117/未选 0，阈值 40+唯一性；副本页金 tab 门控（步长2 ≥40）防卡面金饰误触发
-# 卡5/6（2026-10-25 22:2x 实战校准）：点第二排卡后选角页自动上滚一屏，金框底边 y≈581（wxwhitebox 实测 244 像素），
-# 条带取 (10,572)-(250,590)/(300,572)-(530,590)。⚠️ 仅适配"点卡后滚动"状态；若未来出现不滚动场景需按滚动状态双条带重标
-$charState = "CHAR_NONE"
-$charCounts = @(0,0,0,0,0,0)
+# 副本页金 tab 检测（PAGE=DUNGEON 判据；惰性计算：仅非战斗/非结算/非金弹窗页才算，省 ~3.5 万次 GetPixel）
+# ⚠️ 选角页金框检测（CHAR1-6）已于 2026-10-26 整体退役（用户定版：验证一律 OCR 优先）——
+#   金框细描边在缩小窗（S≈0.5）下抗锯齿混色致阈值全灭，且曾引发放宽阈值→tab 门控误报连锁；
+#   选角页身份改由 wxocr.ps1 -Task charsel 权威判定（读「选择角色」标题，粗字形抗缩放）。
+$dungeonTabGold = 0
 if (-not $btnMatch -and $nSettle -lt 10 -and $nGold -lt 150) {
-    $charStrips = @(
-        @(10,130,105,168), @(300,130,530,168), @(595,130,825,168), @(885,130,1130,168),
-        @(10,572,250,590), @(300,572,530,590)
-    )
-    for ($ci = 0; $ci -lt 6; $ci++) {
-        $s = $charStrips[$ci]
-        $n = 0
-        for ($y = $s[1]; $y -le $s[3]; $y++) { for ($x = $s[0]; $x -le $s[2]; $x++) {
-            $c = $bmp.GetPixel($x, $y)
-            if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $n++ }
-        } }
-        $charCounts[$ci] = $n
-    }
-    $dungeonTabGold = 0
     for ($y = 140; $y -le 205; $y += 2) { for ($x = 30; $x -le 160; $x += 2) {
         $c = $bmp.GetPixel($x, $y)
         if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $dungeonTabGold++ }
     } }
-    if ($dungeonTabGold -ge 40) { $charCounts = @(0,0,0,0,0,0) }   # 步长2计数：副本页tab~65，选角页~10
-    $charBest = 0; $charIdx = 0
-    for ($ci = 0; $ci -lt 6; $ci++) { if ($charCounts[$ci] -gt $charBest) { $charBest = $charCounts[$ci]; $charIdx = $ci + 1 } }
-    $charSecond = 0
-    for ($ci = 0; $ci -lt 6; $ci++) { if (($ci + 1) -ne $charIdx -and $charCounts[$ci] -gt $charSecond) { $charSecond = $charCounts[$ci] } }
-    if ($charBest -ge 40 -and $charSecond -lt 40) { $charState = "CHAR$charIdx" }
 }
 $bmp.Dispose()
 $state = "UNKNOWN"
@@ -152,16 +130,16 @@ elseif ($nSettle -ge 10)                                               { $state 
 elseif ($nLogin  -ge 400 -and $nHp -lt 30 -and $nSide -lt 20)          { $state = "LOGIN_PAGE" }
 elseif ($dOn  -le 0.60 -and ($dOff - $dOn) -ge 0.10)                   { $state = "AUTO_ON" }
 elseif ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)                   { $state = "AUTO_OFF" }   # 按钮=「自动战斗」(关)
-elseif ($charState -ne "CHAR_NONE")                                    { $state = $charState }   # 选角页金框（选中卡条带唯一≥40）
 elseif ($nStam   -ge 60)                                               { $state = "STAMINA_POP" } # 最后判：战斗画面绿色特效会污染 stamina 区
 "STATE=$state"
 # PAGE 附加行（信息用，页面身份签名标定 2026-10-25：主城 193/186、副本 side=461、选角 side=486+、塔页 16-22/17-23、世界地图全 0）
+# ⚠️ 选角页权威判定=wxocr -Task charsel（OCR「选择角色」标题）；此处 side 兜底仅作粗信号，副本页 side=461 也会过线，
+#    区分靠 dungeonTabGold 抢跑——小窗下若金 tab 亦混色衰减，PAGE 可能误报 CHARSEL，关键流程以 OCR 为准（2026-10-26 用户定版）
 $page = switch -regex ($state) {
     "SETTLE_PAGE|AUTO_ON|AUTO_OFF" { if ($nSettle -ge 10) { "SETTLE" } else { "BATTLE" } }
     "TOWER_PAGE" { "TOWER" }
     "TOWN_PAGE" { "TOWN" }
     "LOGIN_PAGE" { "LOGIN" }
-    "CHAR\d" { "CHARSEL" }
     default {
         if ($dungeonTabGold -ge 40) { "DUNGEON" }
         elseif ($nSide -ge 400) { "CHARSEL" }
@@ -170,4 +148,4 @@ $page = switch -regex ($state) {
     }
 }
 "PAGE=$page"
-if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle login=$nLogin side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp char=$($charCounts -join ',')" }
+if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle login=$nLogin side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp dungeonTab=$dungeonTabGold" }
