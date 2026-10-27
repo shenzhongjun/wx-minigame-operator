@@ -1,11 +1,13 @@
 ﻿param([int]$Pid2 = 0, [string]$Out = "$env:TEMP\wrx\canvas_raw.png")
-# wxcanvas.ps1 - measure the game's internal letterbox black bars (2026-10-26)
-# Purpose: verify whether the game canvas keeps the design aspect (1138x708) inside
-#          an arbitrary client rect, and where the canvas sits (centered / top-anchored).
-# Method: CopyFromScreen the whole client rect (raw, no normalize), then scan rows
-#         and columns for near-black uniform bands (R,G,B < 16, >=98% of samples).
-# Output: client size, canvas rect, four bar widths, canvas aspect vs design aspect,
-#         scale if canvas is treated as the design surface, and the centered-assumption
+# wxcanvas.ps1 - measure the game's internal letterbox black bars (2026-10-26, chrome-aware 2026-10-27)
+# Purpose: verify the v1.1.2 geometry model (client = fixed WeChat chrome strip + uniformly
+#          scaled game canvas 1138x653) inside an arbitrary client rect.
+# Method: CopyFromScreen the whole client rect (raw, no normalize); detect chrome strip
+#         (white band from top); scan rows/columns BELOW the chrome for near-black uniform
+#         bands (R,G,B < 16, >=98% of samples) to locate the game canvas.
+# Output: chrome height, client size, game-canvas rect (chrome excluded), four letterbox bar
+#         widths (bar_top measured within the game area below chrome), canvas aspect vs design
+#         canvas aspect (1138/653), scale_w/scale_h, and the v1.1.2 centered-assumption
 #         prediction for comparison. Raw capture saved to -Out for visual audit.
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 
@@ -51,9 +53,10 @@ for ($y = 0; $y -lt [Math]::Min($H, 200); $y++) {
 }
 if ($chromeH -ge 200) { Write-Output "WARN: chrome band exceeds 200px scan cap - white game top? audit manually" }
 
-# row scan: a row is "black" if >=98% of sampled pixels are near-black
+# row scan (game area only, below chrome): a row is "black" if >=98% of sampled pixels are near-black.
+# Chrome rows are excluded so the canvas rect is pure game content (chrome-aware fix 2026-10-27).
 $rowBlack = New-Object bool[] $H
-for ($y = 0; $y -lt $H; $y++) {
+for ($y = $chromeH; $y -lt $H; $y++) {
   $n = 0; $tot = 0
   for ($x = 0; $x -lt $W; $x += 2) {
     $tot++
@@ -62,8 +65,8 @@ for ($y = 0; $y -lt $H; $y++) {
   }
   $rowBlack[$y] = ($n -ge ($tot * 0.98))
 }
-$top = 0; while ($top -lt $H -and $rowBlack[$top]) { $top++ }
-$bot = $H - 1; while ($bot -ge 0 -and $rowBlack[$bot]) { $bot-- }
+$top = $chromeH; while ($top -lt $H -and $rowBlack[$top]) { $top++ }
+$bot = $H - 1; while ($bot -ge $chromeH -and $rowBlack[$bot]) { $bot-- }
 
 # column scan inside the canvas rows only
 $L = -1; $R = -1
@@ -84,12 +87,13 @@ $cw = $R - $L + 1; $ch = $bot - $top + 1
 "chrome=$chromeH"
 "client=${W}x${H}"
 "canvas=($L,$top)-($R,$bot) size=${cw}x${ch}"
-"bar_top=$top bar_bottom=$($H - 1 - $bot) bar_left=$L bar_right=$($W - 1 - $R)"
-"canvas_aspect=$([math]::Round($cw / [double]$ch, 4)) design_aspect=$([math]::Round(1138 / 708.0, 4))"
-"scale_w=$([math]::Round($cw / 1138.0, 4)) scale_h=$([math]::Round($ch / 708.0, 4))"
-$predS = [math]::Min($W / 1138.0, $H / 708.0)
-$predW = [int][math]::Round(1138 * $predS); $predH = [int][math]::Round(708 * $predS)
-$predTop = [int][math]::Round(($H - $predH) / 2.0); $predLeft = [int][math]::Round(($W - $predW) / 2.0)
-"centered_prediction: canvas=${predW}x${predH} top=$predTop left=$predLeft"
+"bar_top=$($top - $chromeH) bar_bottom=$($H - 1 - $bot) bar_left=$L bar_right=$($W - 1 - $R)"
+"canvas_aspect=$([math]::Round($cw / [double]$ch, 4)) design_canvas_aspect=$([math]::Round(1138 / 653.0, 4))"
+"scale_w=$([math]::Round($cw / 1138.0, 4)) scale_h=$([math]::Round($ch / 653.0, 4))"
+$predS = [math]::Min($W / 1138.0, ($H - $chromeH) / 653.0)
+$predW = [int][math]::Round(1138 * $predS); $predH = [int][math]::Round(653 * $predS)
+$predTop = $chromeH + [int][math]::Round((($H - $chromeH) - $predH) / 2.0); $predLeft = [int][math]::Round(($W - $predW) / 2.0)
+"model_prediction(S=min(W/1138,(H-chrome)/653)): canvas=${predW}x${predH} top=$predTop left=$predLeft"
+"hint: pure-black art edges read as bars (charsel top/bottom fade) - bars/canvas fuzzy by ~5px on dark pages; geometry truth = click accuracy, not this scan"
 "saved=$Out"
 $bmp.Dispose()
