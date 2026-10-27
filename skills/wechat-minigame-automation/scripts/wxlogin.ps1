@@ -6,8 +6,10 @@
 #   不再做金框像素回读（细描边小窗混色不可靠，2026-10-26 退役）；点卡操作幂等，双击兜住静默失败。
 #   ⚠️ 残余风险（用户知情接受）：极端情况下两次点击均被吞且当前选中≠目标角色 → 带错角色进游戏；
 #   双吞无实战前科；必要时未来可用 wxocr 读卡片角色名做二次验证。
-# 红线：GOLD_DIALOG 可能是顶号弹窗「账号在其他设备登录」（绝不自动点）——
-#       默认停机退出，请示用户；用户授权后加 -AssumeGold 重跑才点确定。
+# 红线（v1.1.6 更新，用户 2026-10-27 裁决固化）：GOLD_DIALOG 先 wxpopup OCR 分类——
+#       POPUP_IDLE（挂机「重新登录」）→ 自动点确定 (700,513) 重登，两轮实战零异常后固化；
+#       其余类别（顶号「其他设备」/扩展券/正文读不出）红线不变：停机请示，绝不自动点。
+#       -AssumeGold 保留为人工强制放行开关（跳过分类直接点）。
 # 角色卡坐标（未滚动态直点）：1(138,342) 2(421,342) 3(704,340) 4(987,340)（3/4 于 2026-10-26 实测重标：按卡1→2 间距 283 等距外推） 5(139,536) 6(414,536)
 # 选角页共三屏：默认第一屏(1-4)；点 (139,536) 切第二屏(5-8，行 y=370)；7/8 槽位=锁图标严禁点击（建角色弹窗红线）。详见 coords.md
 $scripts = $PSScriptRoot
@@ -44,6 +46,12 @@ function Test-LoginOcr {
     $joined = ($out | ForEach-Object { "$_" }) -join ' '
     return ($joined -match 'OCR=server=HIT')
 }
+function Get-PopupClass {
+    # v1.1.6：GOLD_DIALOG 弹窗 OCR 分类（wxpopup v2），挂机类自动放行的判据源
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
+    foreach ($line in $out) { if ("$line" -match 'POPUP=(POPUP_\w+)') { return $Matches[1] } }
+    return "POPUP_UNKNOWN"
+}
 $card = @{ 1 = "138:342"; 2 = "421:342"; 3 = "704:340"; 4 = "987:340"; 5 = "139:536"; 6 = "414:536" }
 if (-not $card.ContainsKey($Char)) { "ERR: Char must be 1-6"; exit 1 }
 
@@ -51,8 +59,11 @@ $st = Get-State
 "start state=$st"
 if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
 if ($st -eq "GOLD_DIALOG") {
-    if (-not $AssumeGold) {
-        "STOP: GOLD_DIALOG（挂机弹窗/顶号弹窗/登录页金钮需区分）。若目验为挂机或已获用户授权，加 -AssumeGold 重跑"
+    $cls = Get-PopupClass
+    "popup classified=$cls"
+    # v1.1.6 固化：挂机弹窗（POPUP_IDLE）自动点确定；其余红线停机。-AssumeGold=人工强制放行
+    if ($cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
+        "STOP: GOLD_DIALOG 分类=$cls（顶号/涉钱/未知弹窗红线，绝不自动点）。确认安全可加 -AssumeGold 重跑"
         exit 9
     }
     Invoke-Click "700:513:4000"

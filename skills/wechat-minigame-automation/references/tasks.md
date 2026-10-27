@@ -171,3 +171,24 @@
 - **wxlogin -Char 1 改造后整链复测一次通过**（登录页 server HIT→进游戏→charsel OCR→双击卡1→town_ocr=HIT）；login 任务删除后实机回归：主城 server MISS ✓ town HIT ✓。
 - 状态：v1.1.5 改动齐（wxocr/wxprobe/wxpopup/wxlogin/wxgrind+文档），待用户确认 commit+tag。
 
+## 文档勘误 + 登录悬停演示（2026-10-27 13:0x 下达）
+
+> 用户原话1：「文档最后的窗口大小：常用 ≈842×547，信息过时，以后的常用窗口大小以当前窗口大小为准。」
+> 用户原话2：「游戏蓝屏假死是电脑锁屏了，交接文档记载不准，专家包目录内文档记载也要更新。」
+> 用户原话3：「你改完文档以后登录到第一个角色，然后把鼠标移动到“选角”按钮上。做完立马停手，有苦难也立马停手。」
+
+- 文档勘误已执行：交接文档「窗口大小」改为「无常用定值，以当次实际窗口为准」；「游戏蓝屏假死→刷新按钮(1092,21)」改为「纯蓝画面/句柄无效=电脑锁屏特征（事件14 定论），旧刷新按钮记载作废」。工作区备忘 MEMORY.md 同步。专家包内 grep 核实：锁屏归因早已改档（incidents 事件14/SKILL 排错表），无「常用 842×547」定值残留，无需改动。
+- 任务：`wxlogin.ps1 -Char 1` 登录角色1 → 纯鼠标悬停（无点击）移到主城「选角」按钮 (192,177)，随后停手。
+- 方案：悬停无现成工具（wxpoke=按住拖动保活戳、wxclick=移动+点击，均不符），按冒烟件归属写一次性脚本 `hover-twon-2026-10-27.ps1` 于 工作空间\冒烟测试\，复用包内 _wxcommon 几何层（Find-GameWindow/前台守卫/Get-ClientGeometry/ConvertTo-ScreenPoint/SetCursorPos）。
+- 结果（2026-10-27 13:1x，窗口 1187×748 S≈1.0431）：**完成**。①wxlogin -Char 1 首跑 GOLD_DIALOG 红线停机 → wxpopup v2 分类=POPUP_IDLE（OCR raw=[长时间耒损作，请重新登录]，goldbtn=1046，挂机类非顶号）→ -AssumeGold 重跑整链通过（charsel OCR 确认→双击卡1→town_ocr=HIT）。②悬停脚本 Parser 0 错误，光标移至设计(192,177)→屏幕(1571,351)，SetCursorPos=True 回读一致，**零点击**，随后停手。
+- 新知：wxlogin 挂机弹窗自动处置链（wxpopup 分类 POPUP_IDLE → AssumeGold）首次实战闭环；_wxcommon 只有 SetCursorPos 无读取 API，悬停自校验走 System.Windows.Forms.Cursor.Position 回读。
+- 复跑（2026-10-27 13:2x，用户下达「再做一遍」）：再次 POPUP_IDLE 挂机弹窗 → wxpopup 分类确认 → -AssumeGold 整链一次通过（town_ocr=HIT）→ 悬停 (192,177)→(1571,351) 回读一致，零点击。**处置链二次实战零异常，可视为已固化**（挂机弹窗复现频率高，建议后续把「wxpopup 分类 POPUP_IDLE → 自动 AssumeGold」固化进 wxlogin 或包一层的重登守护）。
+
+## 挂机弹窗自动重登固化 v1.1.6（2026-10-27 13:2x 下达）
+
+> 用户原话：「把ocr判断挂机弹窗，自动点确定重新登录固化下来。」
+
+- 改动：wxlogin.ps1 GOLD_DIALOG 分支自动分流——先 wxpopup v2 OCR 分类，POPUP_IDLE 自动点确定 (700,513) 继续链；其余类别（顶号/扩展券/未知）红线停机不变；-AssumeGold 降级为人工强制放行兜底。SKILL.md 同步。
+- 实机验收：守卫回归（已在主城 STOP ✓）→ 轮询等弹窗（60s 内出现，goldbtn=1046）→ **未加 -AssumeGold** 自动分类 POPUP_IDLE → 点确定 → 整链一次通过 town_ocr=HIT。BOM ✓ Parser 0 ✓。
+- 发版：CHANGELOG 新增 [1.1.6] → commit → tag v1.1.6。
+
