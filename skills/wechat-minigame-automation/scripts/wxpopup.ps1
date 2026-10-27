@@ -5,7 +5,7 @@
 #   正文是米黄大字、稳定可读 → OCR 读文字免疫位置浮动，模板子系统退役。
 # 原理：金确定钮守卫带 (600,488)-(780,532) 像素计数判「弹窗在屏」（阈值 400，标定：
 #   弹窗 788-1066 / 战斗·选角 0 / 主城 128）→ wxocr 自由扫描正文带 (350,348)-(800,408)
-#   （v1 正文区 356-392 的 ±20px+ 浮动加宽容）→ 关键字分类（Contains 精确子串）。
+#   （v1 正文区 356-392 的 ±20px+ 浮动加宽容）→ 关键字分类（N 字命中容错，见第 4 步注释）。
 # 分类与处置（红线规则，处置权在调用方）：
 #   POPUP_NONE    无金确定钮（无弹窗；登录页金钮在带内计数不足亦 NONE/UNKNOWN，不再误判 IDLE）
 #   POPUP_RELOGIN 顶号「账号在其他设备登录」        → 红线：停手请示用户（涉账号安全）
@@ -62,12 +62,16 @@ if ($goldBtn -ge 400) {
 }
 $bmp.Dispose()
 
-# ---- 4) 分类（顺序=优先级；正文米黄大字，Contains 精确子串零容差）----
+# ---- 4) 分类（顺序=优先级；2026-10-27 20:3x 用户定版：OCR 全面 N 字命中容错——
+#      原 Contains 精确子串零容差作废，实机「重→谲」漏判 POPUP_IDLE 即根因。
+#      N 随关键字长度自动定（_wxcommon Get-WxAutoMinHit）：其他设备/重新登录 4字→3，
+#      未操作/扩展券 3字→2，羽毛 2字→2（2字无法再宽）。交叉检查：RELOGIN 正文含
+#      「登录」2字 < 3 不会漏进 IDLE，优先级序保底）----
 $cls = "POPUP_UNKNOWN"
 if ($goldBtn -lt 400) { $cls = "POPUP_NONE" }
-elseif ($raw.Contains('其他设备')) { $cls = "POPUP_RELOGIN" }
-elseif ($raw.Contains('未操作') -or $raw.Contains('重新登录')) { $cls = "POPUP_IDLE" }
-elseif ($raw.Contains('扩展券')) { $cls = "POPUP_EXTEND" }
-elseif ($raw.Contains('羽毛')) { $cls = "POPUP_REVIVE" }
+elseif (Test-WxKwHit $raw '其他设备') { $cls = "POPUP_RELOGIN" }
+elseif ((Test-WxKwHit $raw '未操作') -or (Test-WxKwHit $raw '重新登录')) { $cls = "POPUP_IDLE" }
+elseif (Test-WxKwHit $raw '扩展券') { $cls = "POPUP_EXTEND" }
+elseif (Test-WxKwHit $raw '羽毛') { $cls = "POPUP_REVIVE" }
 "POPUP=$cls ocr_raw=[$raw] goldbtn=$goldBtn"
 if ($cls -eq "POPUP_RELOGIN" -or $cls -eq "POPUP_UNKNOWN") { exit 3 }

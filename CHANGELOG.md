@@ -4,6 +4,36 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.1 --stat`（两版间文件差异）。
 
+## [未发版·攒批] - 2026-10-27 23:0x
+
+**主题：55px 坐标体系权威固化 + 2 字零容差铁律（删除 Test-FuzzyText 残留兜底）（用户 23:0x 定版）**
+
+### 代码修复
+- **`wxocr.ps1` 删除 `Test-FuzzyText`（tol=1）兜底**：该残留使「选鱼」对「选角」diff=1 被放行，直接击穿用户铁律「2 个字错一个都不行」；charsel 任务 `tol` 字段一并删除。铁律=**N 字命中宁宽勿严只对 ≥3 字生效；2 字=N=2 零容差；任何形式的二次兜底严禁再加**。
+- `_wxcommon.ps1` 几何注释重写为权威表述：三层坐标定义、55px 物理含义（微信内嵌标题栏固定 55px 不缩放，S 与标题栏无关）、双向换算公式+实算例（1187×748 闭环验证）；**铁律=换算严禁手算，一律 ConvertTo-ScreenPoint / ConvertFrom-ScreenPoint**；三种抓图坐标语义表（wxshot 设计 / -Raw 画布需 +55÷S / wxocr 零换算）。
+
+### 文档固化
+- `coords.md` 头部新增「坐标体系权威表述（唯一版本，冲突以此为准）」：三层坐标对照表、55px 定义、双向公式+实算例、抓图语义表；town 行补 2 字零容差铁律与「选鱼必须 MISS」判例；tasks.md 22:4x 验收结论按新规则作废重判（当时把选鱼被兜底接住记为功，实为过）。
+
+### 验证
+- 单测 10/10 ALL PASS（冒烟测试\test-minhit-semantics.ps1：选鱼 MISS / 选角 HIT / 角选 HIT(池乱序免疫设计如此) / 巨龙山豚 HIT / 巨龙X豚 MISS / 巨龙 MISS / 选择角色 撞车由区域隔离防）。
+- 2 文件 Parser 0 ✓；wxdoclint PASS。
+
+## [未发版·攒批] - 2026-10-27 20:3x
+
+**主题：OCR 全面 N 字命中容错（用户定版「所有涉及到OCR的地方，宁宽勿严，不同字段重复概率很小」）**
+
+### 变更
+- `_wxcommon.ps1` 新增共享函数 `Get-WxAutoMinHit`（N 随关键字长度自动定：2字=2、3-4字=N-1、5-7字=3、8字+=4）+ `Test-WxKwHit`（字符池去重命中数≥N；minhit≤0 时自动定）。
+- `wxocr.ps1`：kw 分支 minhit 缺省改自动定值（显式 minhit 仍可覆盖，scr1w/scr2w 合并池 3 字不变）；**autobtn 零容差作废**改 N 字命中（4字→3，两词共享「自动」2字<3 无交叉误判）；**town 零容差改 minhit=2**（2字→N=2 等效零容差，数值行为不变）。
+- `wxpopup.ps1` 分类链 Contains 精确子串全部改 N 字命中：其他设备/重新登录 4字→3、未操作/扩展券 3字→2、羽毛 2字→2——**「重→谲」漏判 POPUP_IDLE 根因消除**（单测实证「长时间未操作，谲新登录」→ IDLE 命中；RELOGIN 正文含「登录」2字<3 不漏进 IDLE）。
+- 活文档同步：coords.md town/server 行、update-log.md 挂账销项。
+
+### 验收
+- 单元测试 11/11（冒烟测试\test-kwhit-unit-2026-10-27.ps1）：N 定值表 + 错字命中 + autobtn/RELOGIN 交叉负样本全对。
+- 3 文件 BOM ✓ Parser 0 ✓；离线 server=HIT（「巨龙山豚17」误读下）、wxpopup 登录页/主城均 POPUP_NONE。
+- 实机任务复核（town/charsel/autobtn）**待用户恢复游戏窗口后补**——验收时窗口被最小化（179×24，几何守卫停机属正确履职）。
+
 ## [1.1.8] - 2026-10-27
 
 **主题：登录/选角职责拆分（wxcharsel 新增，卡表单源）+ wxlogin 旧卡表 bug 清除 + 文档时效审计修正 + server 判据容错修正**

@@ -4,7 +4,8 @@
 #   1) -Task <name>  跑任务预设（区域+关键字判定内置），输出 OCR=<task>=<RESULT> raw=[文本]
 #   2) 不带 -Task    自由扫描，-X0/-Y0/-X1/-Y1 指定设计坐标区域，输出原文 OCR_RAW=[文本]
 # 任务预设表（新增任务=加一行；区域均为设计坐标 1138x708，含 55px 内嵌标题栏）：
-#   autobtn  自动战斗按钮四字区 (184,169)-(272,193)：取消自动=ON / 自动战斗=OFF（原 wxocrbtn 锁定行为原样迁移，零容差）
+#   autobtn  自动战斗按钮四字区 (184,169)-(272,193)：取消自动=ON / 自动战斗=OFF（原 wxocrbtn 锁定行为原样迁移；
+#            2026-10-27 20:3x 起改 N 字命中容错（4字→3，两词共享「自动」2字<3 无交叉误判），原零容差作废）
 #   charsel  选角页标题 (0,56)-(200,115)：含「选择角色」=HIT（选角页身份权威判定）
 #   scr1     第一屏判据 (40,140)-(210,175)：卡1名字区，含「早睡早起身体好」任意3字=HIT（用户红框区域）
 #   scr2     第二屏判据 (40,238)-(210,264)：卡5名字区（实测名字行 y≈241-259），含「豁达自在乐逍遥」任意3字=HIT；x 与 scr1 同宽窄条，上距横幅(232)6px、下距职业行(269)5px
@@ -15,20 +16,29 @@
 #   scr2w    第二屏升级判据 (36,234)-(215,290)：卡5名字+职业信息条整块（2026-10-27 用户红框定版），
 #            kw「豁达自在乐逍遥」+ kw2「重装机兵」合并任意3字=HIT；上界 234 避横幅(232)，
 #            下界 290 收在职业行(269-288)之下、体力行之上，勿随意扩大。
-#   town     主城判据 (158,162)-(250,200)：左上「◀ 选角」按钮深色条，含「选角」=HIT。
-#            ⚠️ 零容差（minhit=0,tol=0）：「选角」仅2字，选角页标题「选择角色」含同字字符集，
-#            任意容差都会撞车（Test-FuzzyText tol=1 时「择角」窗口即命中）；按钮为 HUD 恒定 UI 文字，
-#            三背景（酒馆/雪地/人流特效）实测零差异（2026-10-27 用户三图），零容差可靠。
-#            区域上界避开头像(≈158)、下界避开任务面板(顶≈216)，勿随意扩大。
+#   town     主城判据 (140,158)-(270,192)：左上「◀ 选角」按钮整块+周围一圈边距（2026-10-27 22:5x
+#            用户定版「不能只扫一小块区域，必须连周围一圈也包括在内」），kw「选角」minhit=2=HIT。
+#            「选角」仅2字，N 字命中规则下 2字→N=2（1字命中必撞车选角页标题「选择角色」），等效零容差。
+#            边界依据（2026-10-27 22:4x 实测隔离）：上界 158=头像下缘、下界 192=公告横幅顶缘
+#            （⚠️ 横幅顶缘实测 ~193，旧档案「206-232」证伪更正——下界 196/200 会整区读空），
+#            横向 ±18/20px 边距容忍窗口尺寸变化的位置微移。区域 (140,158)-(270,192)。
 #   server   登录页判据 (488,455)-(638,492)：深蓝横条白字服务器名，kw「巨龙山脉」（数字区号可变不含），
 #            minhit=3（2026-10-27 晚修正：原零容差被单字误读击穿——888×574 下「脉→豚」raw=[巨龙山豚17]
 #            MISS 致登录页漏判；该区域仅登录页有此字样、无撞车风险，按用户匹配哲学改任意3字命中）。
 #            2026-10-27 用户定版：登录页身份唯一判据（「进入游戏」为风格化美术字 OCR 读不动，
 #            已放弃不做任务；旧区域 (440,505)-(735,556) 切字底缘曾致「透人游咙」误读，勿再尝试）。
-# 匹配规则（2026-10-27 用户定版）：名字唯一，kw 任意 3 字命中即 HIT（漏字/错字/乱序免疫）；autobtn 零容差不变
+# 匹配规则（2026-10-27 20:3x 用户定版·全面 N 字命中；23:0x 补铁律）：所有 OCR 关键字匹配统一
+#   N 字命中（宁宽勿严），N 随关键字长度自动定：2字=2、3-4字=N-1、5-7字=3、8字+=4
+#   （见 _wxcommon Get-WxAutoMinHit）；任务可显式 minhit 覆盖（scr1w/scr2w 合并池 3 字为用户定版值）。
+# ⚠️ 2 字关键字=N=2=零容差（用户 23:0x 定版铁律：「选角」读成「选鱼」=1 命中=必须 MISS，
+#   错一个字都不行，1 字命中必撞车选角页标题「选择角色」）。宁宽勿严只对 ≥3 字生效。
+# ⚠️ 2026-10-27 23:0x 事故修复：旧「1 字替换容差 Test-FuzzyText」兜底已彻底删除——
+#   残留兜底曾使「选鱼」对「选角」diff=1 被放行，直接击穿 2 字零容差（用户怒斥定版）。
+#   N 字命中本身已覆盖替换类误读（N-1 字命中在容差内），任何形式的二次兜底严禁再加。
 # kw2（可选，2026-10-27 16:1x 用户定版）：第二关键字**并入字符池**，与 kw 合并去重后任意 minhit 字命中
 #   即 HIT（用户纠正原话：「kw+kw2 一共任意 3 字命中就行了」，不是 kw2 全字命中）
-# ⚠️ 公告横幅污染区 y≈206-232（橙色滚动公告，临时元素）——OCR 区域严禁跨入，scr1/scr2 已避开；
+# ⚠️ 公告横幅污染区：实测顶缘 ~193（2026-10-27 22:4x 隔离定版：下界 192 能读、196 读空；
+#    旧档案「206-232」证伪更正）——OCR 区域下界严禁 ≥193；横幅为临时滚动元素，时有时无。
 #    2026-10-27 实测教训：盲扫 195-255 被横幅「…龙脊战魔护腿…」搅成乱码
 # 原理：设计坐标裁剪 → 灰度反相（白字→黑字深底→浅底，-NoInvert 关闭）→ 双三次放大 F 倍
 #       → Windows.Media.Ocr(zh-Hans，零第三方依赖) → 关键字/原文输出。单次 ~250ms，Token 消耗与探针同量级。
@@ -36,12 +46,12 @@
 
 $tasks = @{
     autobtn = @{ x0 = 184; y0 = 169; x1 = 272; y1 = 193; kind = 'auto' }
-    charsel = @{ x0 = 0;   y0 = 56;  x1 = 200; y1 = 115; kind = 'kw'; kw = '选择角色'; tol = 1 }
+    charsel = @{ x0 = 0;   y0 = 56;  x1 = 200; y1 = 115; kind = 'kw'; kw = '选择角色' }
     scr1    = @{ x0 = 40;  y0 = 140; x1 = 210; y1 = 175; kind = 'kw'; kw = '早睡早起身体好'; minhit = 3 }
     scr2    = @{ x0 = 40;  y0 = 238; x1 = 210; y1 = 264; kind = 'kw'; kw = '豁达自在乐逍遥'; minhit = 3 }
     scr1w   = @{ x0 = 36;  y0 = 130; x1 = 215; y1 = 204; kind = 'kw'; kw = '早睡早起身体好'; minhit = 3; kw2 = '圣骑士' }
     scr2w   = @{ x0 = 36;  y0 = 234; x1 = 215; y1 = 290; kind = 'kw'; kw = '豁达自在乐逍遥'; minhit = 3; kw2 = '重装机兵' }
-    town    = @{ x0 = 158; y0 = 162; x1 = 250; y1 = 200; kind = 'kw'; kw = '选角'; minhit = 0; tol = 0 }
+    town    = @{ x0 = 140; y0 = 158; x1 = 270; y1 = 192; kind = 'kw'; kw = '选角'; minhit = 2 }
     server  = @{ x0 = 488; y0 = 455; x1 = 638; y1 = 492; kind = 'kw'; kw = '巨龙山脉'; minhit = 3 }
 }
 
@@ -134,45 +144,26 @@ $sb = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.Softw
 $res = Await ($engine.RecognizeAsync($sb)) ([Windows.Media.Ocr.OcrResult])
 $ras.Dispose()
 
-# 容差规则（用户 2026-10-26 定版）：页面身份类任务（kind=kw）允许 1 字替换容差
-#   （实测 0.476× 小窗「选择角色」被 OCR 误读为「选捧角色」，精确匹配 MISS）；增删字不在容差内。
-#   autobtn ON/OFF 判定保持零容差（有模板匹配主判定兜底，误判代价不对等）。
-function Test-FuzzyText([string]$text, [string]$kw, [int]$maxDiff) {
-    if ($text.Length -lt $kw.Length) { return $false }
-    for ($i = 0; $i -le $text.Length - $kw.Length; $i++) {
-        $diff = 0
-        for ($j = 0; $j -lt $kw.Length; $j++) { if ($text[$i + $j] -cne $kw[$j]) { $diff++ } }
-        if ($diff -le $maxDiff) { return $true }
-    }
-    return $false
-}
-
 $text = ($res.Text -replace '\s+', '')
 if ($kind -eq 'auto') {
-    # 原 wxocrbtn 锁定行为：只认明确关键字，宁可 UNKNOWN 不可误判（零容差）
+    # 2026-10-27 20:3x 用户定版：OCR 全面 N 字命中——autobtn 原零容差作废（4字→N=3，
+    # 两词共享「自动」2字<3 无交叉误判）；ON 优先判定不变。模板匹配主判定兜底不变。
     $cls = "UNKNOWN"
-    if ($text.Contains('取消自动')) { $cls = "ON" }
-    elseif ($text.Contains('自动战斗')) { $cls = "OFF" }
+    if (Test-WxKwHit $text '取消自动') { $cls = "ON" }
+    elseif (Test-WxKwHit $text '自动战斗') { $cls = "OFF" }
     "OCR=autobtn=$cls raw=[$text]"
 } elseif ($kind -eq 'kw') {
-    # 匹配规则（用户 2026-10-27 定版）：名字唯一，容错从宽——关键字任意 3 个字（去重）出现在
-    # OCR 文本即 HIT（漏字/错字/乱序全免疫，如「早睡早起身体好」被吞成「早早起身体好」仍命中）。
-    # tol 子序列替换匹配保留作次级兜底；autobtn 不走此分支（零容差）。
+    # 匹配规则（2026-10-27 20:3x 用户定版·全面 N 字命中，宁宽勿严；23:0x 铁律补）：字符池去重后
+    # 命中数达 N 即 HIT（漏字/错字/乱序全免疫）。N 默认按关键字长度自动定（Get-WxAutoMinHit），
+    # 任务显式 minhit 可覆盖。⚠️ 2 字关键字 N=2 零容差，错一字即 MISS；无任何二次兜底。
     $kw = $tasks[$Task].kw
-    $minhit = 3; if ($t -and $t.Contains('minhit')) { $minhit = $t.minhit }
-    $tol = 1; if ($t -and $t.Contains('tol')) { $tol = $t.tol }
-    # kw2（可选，2026-10-27 用户定版）：第二关键字并入字符池，与 kw 合并去重后任意
-    # minhit 个字命中即 HIT（用户原话：「kw+kw2 一共任意 3 字命中就行了」）
+    $minhit = 0; if ($t -and $t.Contains('minhit')) { $minhit = $t.minhit }
+    # kw2（可选）：第二关键字并入字符池，与 kw 合并去重后任意 N 字命中即 HIT
     $pool = $kw
     $kw2 = ''
     if ($t -and $t.Contains('kw2')) { $kw2 = $t.kw2; $pool = "$kw$kw2" }
     $hit = $text.Contains($kw) -or ($kw2 -ne '' -and $text.Contains($kw2))
-    if (-not $hit -and $minhit -gt 0) {
-        $cnt = 0
-        foreach ($ch in ($pool.ToCharArray() | Select-Object -Unique)) { if ($text.Contains([string]$ch)) { $cnt++ } }
-        $hit = ($cnt -ge $minhit)
-    }
-    if (-not $hit) { $hit = Test-FuzzyText $text $kw $tol }
+    if (-not $hit) { $hit = Test-WxKwHit $text $pool $minhit }
     "OCR=$Task=$(if ($hit) { 'HIT' } else { 'MISS' }) raw=[$text]"
 } else {
     if ($text -eq "") { "OCR_RAW=EMPTY" } else { "OCR_RAW=[$text]" }

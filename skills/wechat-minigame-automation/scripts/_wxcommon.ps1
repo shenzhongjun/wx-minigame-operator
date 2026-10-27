@@ -92,10 +92,28 @@ function Find-GameWindow {
 }
 
 # ---- 客户区几何：读尺寸+原点，并给出设计坐标→屏幕的换算参数 ----
-# 设计基准 1138x708（含 55px 内嵌标题栏，游戏画布=设计 55-707 行）。客户区结构：
-#   [标题栏 固定 55px 不缩放] + [游戏画布 等比缩放]（2026-10-26 wxcanvas.ps1 两尺寸实测坐实）
-# 换算：S = min(W/1138, (H-55)/653)；纵向 screen_y = OY + 55 + (design_y-55)*S；横向居中留边。
+# ═══════════════════════════════════════════════════════════════════
+# 55px 内嵌标题栏模型（唯一权威表述，2026-10-26 wxcanvas 两尺寸实测定版）：
+#   客户区物理结构 = [顶部 55 物理px 微信内嵌标题栏（白条「勇士之心」+胶囊按钮，固定不缩放）]
+#                    + [游戏画布（随窗口等比缩放，横向居中留边）]
+#   设计坐标系 1138x708 = 虚拟截图坐标系：0-54 行「占位」表示标题栏（不属于游戏画面），
+#   游戏内容全部在 设计 55-707 行（1138x653）。coords.md/模板/OCR 区域全部用设计坐标。
+#   画布缩放 S = min(W/1138, (H-55)/653)——55 只出现在「减去」这一处，S 与标题栏无关。
+# 换算公式（双向）：
+#   正向(点击)  screen_x = OX + OFFX + x*S
+#               screen_y = OY + 55 + (y-55)*S        ← 先减 55 再乘 S 再加回 55
+#   反向(标定)  design_x = (screen_x - OX - OFFX)/S
+#               design_y = 55 + (screen_y - OY - 55)/S  ← ⚠️ 漏掉内层 55 就会偏约 55*S 像素
+#   实算例（客户区 1187x748 → S=1.043，设 OY=180）：设计(196,179) →
+#     screen_y = 180 + 55 + (179-55)*1.043 = 180+55+129 = 364；
+#     反向 364 → 55 + (364-180-55)/1.043 = 55 + 124 = 179 ✓ 闭环。
+#   **运行时/标定一律调 ConvertTo-ScreenPoint / ConvertFrom-ScreenPoint，严禁手算**（铁律）。
 # 基准 1138x708 时 S=1，与旧全客户区模型重合，已验证坐标零失效。任意窗口尺寸（含非等比/缩小窗）可换算。
+# ⚠️ 三种抓图的坐标语义（混淆高发点，2026-10-27 23:0x 用户令固化）：
+#   wxshot（无 -Raw）→ 1138x708 设计位图，量出来的坐标=设计坐标，直接对照 coords.md；
+#   wxshot -Raw     → 仅画布实时尺寸（无标题栏），量出的 y 是画布相对值，design_y = 55 + y/S；
+#   wxocr -Task     → 在归一化设计位图上裁剪，任务区域=设计坐标，无需任何换算。
+# ═══════════════════════════════════════════════════════════════════
 function Get-ClientGeometry {
     param([IntPtr]$h, [switch]$NoAssert, [switch]$Exact)
     $cr = New-Object WXCommon+RECT; [WXCommon]::GetClientRect($h, [ref]$cr) | Out-Null
@@ -119,6 +137,7 @@ function Get-ClientGeometry {
 }
 
 # ---- 设计坐标 → 屏幕坐标（点击/采样前调用）----
+# ⚠️ 唯一换算入口：设计坐标→屏幕一律走本函数，严禁在调用方手算 55px 偏移（见上方模型注释）
 # 纵向：设计 0-54 行=标题栏（固定 55px 不缩放），画布行自设计 55 起以 S 缩放
 function ConvertTo-ScreenPoint {
     param($g, [int]$x, [int]$y)
@@ -129,6 +148,7 @@ function ConvertTo-ScreenPoint {
 }
 
 # ---- 屏幕坐标 → 设计坐标（诊断/截图标定用）----
+# ⚠️ 唯一换算入口：屏幕坐标→设计一律走本函数（标定脚本也必须调它），严禁手算（见上方模型注释）
 function ConvertFrom-ScreenPoint {
     param($g, [int]$x, [int]$y)
     [pscustomobject]@{
@@ -169,6 +189,24 @@ function Test-WxMinClientW([int]$clientW) {
         return $false
     }
     return $true
+}
+
+# ---- OCR 关键字 N 字命中容错（2026-10-27 20:3x 用户定版：所有 OCR 匹配点统一 N 字命中，宁宽勿严）----
+# N 按关键字长度自动定：2字=2（无法再宽，1字必撞车）；3-4字=N-1（容1错字）；5-7字=3；8字+=4
+# 依据：不同字段重复概率很小（用户原话）；autobtn 两词共享「自动」2字 < 3，N=3 无交叉误判
+function Get-WxAutoMinHit([string]$kw) {
+    $n = ($kw.ToCharArray() | Select-Object -Unique).Count
+    if ($n -le 2) { return $n }
+    if ($n -le 4) { return $n - 1 }
+    if ($n -le 7) { return 3 }
+    return 4
+}
+# 字符池命中判定：pool 去重字符在 text 中命中数 >= minhit 即 $true；minhit<=0 时按长度自动定
+function Test-WxKwHit([string]$text, [string]$pool, [int]$minhit = 0) {
+    if ($minhit -lt 1) { $minhit = Get-WxAutoMinHit $pool }
+    $cnt = 0
+    foreach ($ch in ($pool.ToCharArray() | Select-Object -Unique)) { if ($text.Contains([string]$ch)) { $cnt++ } }
+    return ($cnt -ge $minhit)
 }
 
 # ---- 最近邻缩放：保留原始 RGB，避免插值灰度污染色彩阈值与白掩码 ----
