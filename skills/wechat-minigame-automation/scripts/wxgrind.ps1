@@ -107,7 +107,9 @@ function Invoke-PopupGuard {
         Invoke-Click "700:513:600" | Out-Null
         Start-Sleep -Seconds 2
         $after = Invoke-ProbeHeal
-        if ($after -eq "LOGIN_PAGE") { Write-Host "GUARD: login page behind popup -> kicked"; return "LOGIN" }
+        # 2026-10-27：LOGIN_PAGE 探针退役，登录页身份=wxocr server 任务（用户定版 OCR 优先）
+        $loginOut = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1 | Out-String
+        if ($loginOut -match 'OCR=server=HIT') { Write-Host "GUARD: login page behind popup (wxocr server HIT) -> kicked"; return "LOGIN" }
         return "OK"
     }
     Write-Host "GUARD: not idle popup ($($joined.Trim())) -> stop"

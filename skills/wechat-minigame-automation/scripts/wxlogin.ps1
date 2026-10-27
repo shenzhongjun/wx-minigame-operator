@@ -31,6 +31,19 @@ function Test-CharSel {
     }
     return $false
 }
+function Test-TownOcr {
+    # 主城身份权威判定（2026-10-27：wxprobe TOWN_PAGE 退役，OCR 为准）
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task town 2>&1
+    $joined = ($out | ForEach-Object { "$_" }) -join ' '
+    return ($joined -match 'OCR=town=HIT')
+}
+function Test-LoginOcr {
+    # 登录页身份权威判定（2026-10-27 用户定版：探针退役，OCR 为准，唯一判据=server 任务）
+    # 「进入游戏」为风格化美术字 OCR 读不动，用户裁定不设任务
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1
+    $joined = ($out | ForEach-Object { "$_" }) -join ' '
+    return ($joined -match 'OCR=server=HIT')
+}
 $card = @{ 1 = "138:342"; 2 = "421:342"; 3 = "704:340"; 4 = "987:340"; 5 = "139:536"; 6 = "414:536" }
 if (-not $card.ContainsKey($Char)) { "ERR: Char must be 1-6"; exit 1 }
 
@@ -47,14 +60,17 @@ if ($st -eq "GOLD_DIALOG") {
     "after gold-confirm state=$st"
     if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
 }
-if ($st -eq "LOGIN_PAGE") {
+if (Test-LoginOcr) {
     Invoke-Click "571:527:5000"
     $st = Get-State
     "after login state=$st"
     if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
 }
-if ($st -in @("TOWN_PAGE", "TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) {
+if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) {
     "STOP: state=$st 疑似已在游戏内，重登链不适用，人工核对"; exit 9
+}
+if (Test-TownOcr) {
+    "STOP: 已在主城（wxocr town HIT），重登链不适用，人工核对"; exit 9
 }
 if (-not (Test-CharSel)) {
     "STOP: OCR 15s 内未确认选角页（「选择角色」标题未命中），截图人工核对 (last state=$st)"; exit 9
@@ -66,4 +82,5 @@ Invoke-Click "$($card[$Char]):1500"
 "char$Char card clicked (double, idempotent)"
 Invoke-Click "1018:634:5000"
 $st = Get-State
-"login chain done (final state=$st)；主城可能报 GOLD_DIALOG(金图标误报)/UNKNOWN，异常请截图核对"
+$townHit = if (Test-TownOcr) { "HIT" } else { "MISS" }
+"login chain done (final state=$st town_ocr=$townHit)；主城可能报 GOLD_DIALOG(金图标误报)/UNKNOWN，异常请截图核对"

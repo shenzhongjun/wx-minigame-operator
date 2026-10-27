@@ -1,92 +1,73 @@
 ﻿param([int]$Pid2 = 0, [string]$Img = "", [switch]$Debug)
-# 弹窗正文分类器（2026-10-25 新增，消灭 GOLD_DIALOG 人工目验）
-# 原理：三类已知弹窗共用同一面板几何（提示标题+正文+双按钮），
-#   抓正文区 (423,356)-(752,392) 掩码与 assets\popup_idle/relogin/extend.png 模板做 Jaccard 距离，
-#   距离小者胜；差距不足或距离≥0.55 → POPUP_UNKNOWN（宁可不知，不可误判）
+# wxpopup.ps1 v2 - 弹窗分类器 OCR 化（2026-10-27，用户定版：结合 OCR 升级弹窗判断体系）
+# 背景：v1 正文区像素模板匹配对正文行位置浮动脆弱——「长时间未操作，请重新登录」弹窗正文
+#   较模板下移 ~16px 即 d_idle=0.939 全灭误报 UNKNOWN（2026-10-27 实战复盘）。
+#   正文是米黄大字、稳定可读 → OCR 读文字免疫位置浮动，模板子系统退役。
+# 原理：金确定钮守卫带 (600,488)-(780,532) 像素计数判「弹窗在屏」（阈值 400，标定：
+#   弹窗 788-1066 / 战斗·选角 0 / 主城 128）→ wxocr 自由扫描正文带 (350,348)-(800,408)
+#   （v1 正文区 356-392 的 ±20px+ 浮动加宽容）→ 关键字分类（Contains 精确子串）。
 # 分类与处置（红线规则，处置权在调用方）：
-#   POPUP_IDLE    挂机「长时间未操作，请重新登录」→ 可点确定 (700,513)
-#   POPUP_RELOGIN 顶号「账号在其他设备登录」      → 红线：停手请示用户
-#   POPUP_EXTEND  角色栏扩展券（涉商城）          → 只点取消 (471,502)
-#   POPUP_NONE    正文区无文字（无弹窗/背景干扰）
-#   POPUP_UNKNOWN 未知弹窗                        → 红线：停手请示用户
-# -Img 离线模式供标定/回归；默认实时截屏（-Pid2 0=按标题自动发现）
+#   POPUP_NONE    无金确定钮（无弹窗；登录页金钮在带内计数不足亦 NONE/UNKNOWN，不再误判 IDLE）
+#   POPUP_RELOGIN 顶号「账号在其他设备登录」        → 红线：停手请示用户（涉账号安全）
+#   POPUP_IDLE    挂机「长时间未操作，请重新登录」  → 可点确定 (700,513)
+#   POPUP_EXTEND  角色栏扩展券（涉商城）            → 只点取消 (471,502)
+#   POPUP_REVIVE  死亡「…不死鸟羽毛…」             → 可点确定（用户已授权羽毛复活）
+#   POPUP_UNKNOWN 有金钮但正文不认识/读不出        → 红线：停手请示用户
+# 输出: POPUP=<cls> ocr_raw=[..] goldbtn=N；RELOGIN/UNKNOWN exit 3（wxgrind 按 POPUP_IDLE 子串分流，兼容 v1）
+# -Img 离线模式供标定/回归（传完整客户区截图）；默认实时截屏（-Pid2 0=按标题自动发现）
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
+$scripts = $PSScriptRoot
 
-$PX0 = 423; $PY0 = 356; $PX1 = 752; $PY1 = 392   # 正文区（三弹窗实测公共覆盖）
 $GOLDX0 = 600; $GOLDY0 = 488; $GOLDX1 = 780; $GOLDY1 = 532   # 金确定钮守卫带
-$pw = $PX1 - $PX0 + 1; $ph = $PY1 - $PY0 + 1
+$BX0 = 350; $BY0 = 348; $BX1 = 800; $BY1 = 408               # 正文带（容忍正文行位置浮动）
 
-# 米黄正文 + 金色关键词双适配掩码（区别于按钮纯白掩码）
-function Get-PopupMask([System.Drawing.Bitmap]$b, [int]$ox, [int]$oy) {
-    $m = New-Object bool[] ($pw * $ph)
-    for ($y = 0; $y -lt $ph; $y++) { for ($x = 0; $x -lt $pw; $x++) {
-        $c = $b.GetPixel($ox + $x, $oy + $y)
-        if (($c.R -gt 170 -and $c.G -gt 150 -and $c.B -gt 110) -or ($c.R -gt 190 -and $c.G -gt 150 -and ($c.R - $c.B) -gt 60)) { $m[$y * $pw + $x] = $true }
-    } }
-    return $m
-}
-
-function Import-PopupTemplates {
-    $a = Get-WxAssetsDir
-    @{
-        Idle    = Get-PopupMask (New-Object System.Drawing.Bitmap "$a\popup_idle.png") 0 0
-        Relogin = Get-PopupMask (New-Object System.Drawing.Bitmap "$a\popup_relogin.png") 0 0
-        Extend  = Get-PopupMask (New-Object System.Drawing.Bitmap "$a\popup_extend.png") 0 0
-    }
-}
-
+# ---- 1) 取设计坐标位图（离线 -Img / 实时抓屏统一到 1138x708）----
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
     if ($bmp.Width -lt 800 -or $bmp.Height -lt 550) {
-        "ERR: image $($bmp.Width)x$($bmp.Height) 过小，-Img 需传完整客户端区截图"; exit 4
+        $bmp.Dispose(); "ERR: image $($bmp.Width)x$($bmp.Height) 过小，-Img 需传完整客户端区截图"; exit 4
     }
     if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
         $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
         if (-not [object]::ReferenceEquals($norm, $bmp)) { $bmp.Dispose() }
         $bmp = $norm
     }
-    $live = Get-PopupMask $bmp $PX0 $PY0
 } else {
     $h = Find-GameWindow -Pid2 $Pid2
     if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     $geo = Get-ClientGeometry $h
-    # 截联合区域：正文区+金确定钮带 (423,356)-(780,532)（设计坐标，自动换算并归一化）
-    $bmp = Get-DesignRegion $geo $PX0 $PY0 $GOLDX1 $GOLDY1
-    $live = Get-PopupMask $bmp 0 0
+    $bmp = Get-DesignBitmap $geo
 }
 
-$tpl = Import-PopupTemplates
-$dIdle = [math]::Round((Get-WxJaccard $live $tpl.Idle), 3)
-$dRel  = [math]::Round((Get-WxJaccard $live $tpl.Relogin), 3)
-$dExt  = [math]::Round((Get-WxJaccard $live $tpl.Extend), 3)
-
-# 面板守卫：三类弹窗都有金色确定按钮（带 (600,488)-(780,532) 金像素标定，步长2 计数：
-# 弹窗 788-1066 / 战斗·选角 0 / 主城 128 → 阈值 400 六倍边际）。
-# 无金确定钮=无弹窗面板 → POPUP_NONE；有钮但正文不匹配 → POPUP_UNKNOWN（未知弹窗，红线请示）
+# ---- 2) 金确定钮计数 ----
 $goldBtn = 0
-if ($Img -ne "") {
-    for ($y = $GOLDY0; $y -le $GOLDY1; $y += 2) { for ($x = $GOLDX0; $x -le $GOLDX1; $x += 2) {
-        $c = $bmp.GetPixel($x, $y)
-        if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $goldBtn++ }
-    } }
-} else {
-    for ($y = $GOLDY0 - $PY0; $y -le $GOLDY1 - $PY0; $y += 2) { for ($x = $GOLDX0 - $PX0; $x -le $GOLDX1 - $PX0; $x += 2) {
-        $c = $bmp.GetPixel($x, $y)
-        if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $goldBtn++ }
-    } }
+for ($y = $GOLDY0; $y -le $GOLDY1; $y += 2) { for ($x = $GOLDX0; $x -le $GOLDX1; $x += 2) {
+    $c = $bmp.GetPixel($x, $y)
+    if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $goldBtn++ }
+} }
+
+# ---- 3) OCR 正文带（有金钮才扫；实时模式把设计位图落临时盘复用 wxocr -Img，避免二次抓屏竞态）----
+$raw = ""
+if ($goldBtn -ge 400) {
+    $tmpPng = $Img
+    if ($tmpPng -eq "") {
+        $tmpPng = Join-Path $env:TEMP ("wrx_popup_" + [guid]::NewGuid().ToString('N') + ".png")
+        $bmp.Save($tmpPng, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Img $tmpPng -X0 $BX0 -Y0 $BY0 -X1 $BX1 -Y1 $BY1 2>&1
+    $joined = ($out | ForEach-Object { "$_" }) -join ' '
+    if ($joined -match 'OCR_RAW=\[(.*)\]') { $raw = $Matches[1] }
+    if ($Img -eq "" -and (Test-Path $tmpPng)) { Remove-Item $tmpPng -Force }
 }
 $bmp.Dispose()
 
-$nLive = 0; foreach ($v in $live) { if ($v) { $nLive++ } }
+# ---- 4) 分类（顺序=优先级；正文米黄大字，Contains 精确子串零容差）----
 $cls = "POPUP_UNKNOWN"
-if ($goldBtn -lt 400) {
-    $cls = "POPUP_NONE"
-} elseif ($nLive -lt 15) {
-    $cls = "POPUP_NONE"
-} else {
-    $pairs = @(@('POPUP_IDLE', $dIdle), @('POPUP_RELOGIN', $dRel), @('POPUP_EXTEND', $dExt)) | Sort-Object { $_[1] }
-    if ($pairs[0][1] -le 0.55 -and ($pairs[1][1] - $pairs[0][1]) -ge 0.08) { $cls = $pairs[0][0] }
-}
-"POPUP=$cls d_idle=$dIdle d_relogin=$dRel d_extend=$dExt pixels=$nLive goldbtn=$goldBtn"
+if ($goldBtn -lt 400) { $cls = "POPUP_NONE" }
+elseif ($raw.Contains('其他设备')) { $cls = "POPUP_RELOGIN" }
+elseif ($raw.Contains('未操作') -or $raw.Contains('重新登录')) { $cls = "POPUP_IDLE" }
+elseif ($raw.Contains('扩展券')) { $cls = "POPUP_EXTEND" }
+elseif ($raw.Contains('羽毛')) { $cls = "POPUP_REVIVE" }
+"POPUP=$cls ocr_raw=[$raw] goldbtn=$goldBtn"
 if ($cls -eq "POPUP_RELOGIN" -or $cls -eq "POPUP_UNKNOWN") { exit 3 }

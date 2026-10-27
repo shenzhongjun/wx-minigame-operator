@@ -16,6 +16,6 @@ s1_login_after.png,,CHAR1
 s1_dungeon_page.png,,UNKNOWN
 s2_dungeon.png,,UNKNOWN
 rebase_708.png,,GOLD_DIALOG
-s1_town.png,,TOWN_PAGE
-s3_nav1.png,,TOWN_PAGE
+s1_town.png,,UNKNOWN  # 2026-10-27 TOWN_PAGE 退役，主城身份=wxocr -Task town
+s3_nav1.png,,UNKNOWN  # 同上
 s1_town2.png,,UNKNOWN

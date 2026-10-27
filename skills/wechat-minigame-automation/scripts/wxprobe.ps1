@@ -6,12 +6,13 @@
 #                 三者按钮位置重叠，动作统一：点 (700,513) —— 对三种弹窗都安全且正确）
 #   STAMINA_POP   「体力 数量:N」弹窗（体力不足停止信号，点空白关闭）
 #   SETTLE_PAGE   结算页（可点「再来一次」）
-#   LOGIN_PAGE    登录页（点「进入游戏」571,527）
 #   AUTO_ON       按钮模板匹配=「取消自动」→ 已开启（勿再点）
 #   AUTO_OFF      按钮模板匹配=「自动战斗」→ 未开启（需点 224,181）
 #                 （2026-10-23 晚重写：模板匹配判定，与血量/tip/底色全部无关）
 #   OCCLUDED      纯色画面（最小化/遮挡/锁屏），先 wxrestore（事件4/15）
 #   UNKNOWN       以上都不是（需人工截图确认）
+#                 ⚠️ 2026-10-27 起 主城/登录页均报 UNKNOWN：TOWN_PAGE+LOGIN_PAGE 像素判据退役，
+#                 页面身份以 OCR 为准——主城=wxocr -Task town，登录页=wxocr -Task server
 # -Img <png>：离线分析整客户端区截图（任意尺寸自动归一化到 1138x708；回归/标定用，跳过窗口查找与纯色守卫）
 # -Quick：轻量模式（等待结算轮询用）——只算 金弹窗/结算带/体力弹窗 三个廉价特征，
 #         跳过 模板/CHAR/血条/登录侧栏（省 ~60% 像素扫描）；输出状态限定 GOLD_DIALOG/SETTLE_PAGE/STAMINA_POP/UNKNOWN
@@ -53,8 +54,7 @@ $SX0=420; $SY0=380; $SX1=760; $SY1=540
 $BX=915; $BY0=225; $BH=220
 # 底部血条区 —— AUTO_* 的必要条件（排除非战斗页白字干扰）
 $HX0=480; $HY0=655; $HX1=700; $HY1=680
-# 登录页「进入游戏」白色大字区
-$LX0=440; $LY0=505; $LX1=735; $LY1=556
+# 登录页「进入游戏」白色大字区（LX0-LY1 常量已随 LOGIN_PAGE 退役删除，2026-10-27；OCR 判据=wxocr server 任务）
 # 左侧分类栏白字区（排除登录页误报）
 $NX0=30; $NY0=130; $NX1=160; $NY1=520
 
@@ -95,9 +95,7 @@ if ($Quick) {
 
 # 血条: 绿或红
 $nHp = CountPixels $HX0 $HY0 $HX1 $HY1 { param($c) (($c.G -gt 140 -and ($c.G-$c.R) -gt 40 -and ($c.G-$c.B) -gt 40)) -or ($c.R -gt 170 -and ($c.R-$c.G) -gt 60) }
-# 登录页白色大字: R,G,B 均>215
-$nLogin = CountPixels $LX0 $LY0 $LX1 $LY1 { param($c) $c.R -gt 215 -and $c.G -gt 215 -and $c.B -gt 215 }
-# 左侧分类栏白字
+# 左侧分类栏白字（nLogin 已随 LOGIN_PAGE 退役删除，2026-10-27）
 $nSide = CountPixels $NX0 $NY0 $NX1 $NY1 { param($c) $c.R -gt 215 -and $c.G -gt 215 -and $c.B -gt 215 }
 
 # 左上角按钮文字模板匹配（AUTO_ON/AUTO_OFF 判定唯一来源；区域/模板由 _wxcommon 单源提供）
@@ -120,14 +118,15 @@ if (-not $btnMatch -and $nSettle -lt 10 -and $nGold -lt 150) {
 }
 $bmp.Dispose()
 $state = "UNKNOWN"
-# 状态机（2026-10-25 晚 PAGE 重标定）：
+# 状态机（2026-10-25 晚 PAGE 重标定；2026-10-27 TOWN_PAGE+LOGIN_PAGE 退役——
+#   主城像素签名对背景脆弱（三背景实测中下金带 snow/crowd=0），登录页 nLogin 美术改版后 389 卡阈值 400 边缘拉跨；
+#   用户定版：页面身份一律 OCR。主城=wxocr -Task town，登录页=wxocr -Task server。
+#   wxprobe 在主城/登录页将报 UNKNOWN，属预期。）
 #  GOLD 阈值 150→450：真弹窗金确定钮 gold≈1066，主城金图标 gold=193-206 —— 一刀切开
 #  SETTLE_PAGE 加 btnMatch 门控：毁灭之塔红月背景 settle=16-22 但无按钮（dist=1），真结算面板按钮可见
 if     (-not $btnMatch -and $nGold -ge 450)                            { $state = "GOLD_DIALOG" } # 金确定钮弹窗（挂机/顶号/死亡，gold≈1066；用 wxpopup 细分）
-elseif ($nGold -ge 100 -and $nSide -ge 100 -and $nSettle -lt 10)       { $state = "TOWN_PAGE" }   # 主城：金图标 193-206 + 左侧栏 186-217
 elseif ($nSettle -ge 10 -and $btnMatch)                                { $state = "SETTLE_PAGE" } # 真结算：面板按钮可见（战斗中红怪入带误报仍不可修，见档案）
 elseif ($nSettle -ge 10)                                               { $state = "TOWER_PAGE" }  # 塔页红月：settle 命中但无按钮
-elseif ($nLogin  -ge 400 -and $nHp -lt 30 -and $nSide -lt 20)          { $state = "LOGIN_PAGE" }
 elseif ($dOn  -le 0.60 -and ($dOff - $dOn) -ge 0.10)                   { $state = "AUTO_ON" }
 elseif ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)                   { $state = "AUTO_OFF" }   # 按钮=「自动战斗」(关)
 elseif ($nStam   -ge 60)                                               { $state = "STAMINA_POP" } # 最后判：战斗画面绿色特效会污染 stamina 区
@@ -138,14 +137,12 @@ elseif ($nStam   -ge 60)                                               { $state 
 $page = switch -regex ($state) {
     "SETTLE_PAGE|AUTO_ON|AUTO_OFF" { if ($nSettle -ge 10) { "SETTLE" } else { "BATTLE" } }
     "TOWER_PAGE" { "TOWER" }
-    "TOWN_PAGE" { "TOWN" }
-    "LOGIN_PAGE" { "LOGIN" }
     default {
         if ($dungeonTabGold -ge 40) { "DUNGEON" }
         elseif ($nSide -ge 400) { "CHARSEL" }
-        elseif (($nSide -lt 50) -and ($nGold -lt 50) -and ($nSettle -lt 5) -and ($nLogin -lt 50)) { "WORLD_MAP" }
+        elseif (($nSide -lt 50) -and ($nGold -lt 50) -and ($nSettle -lt 5)) { "WORLD_MAP" }
         else { "UNKNOWN" }
     }
 }
 "PAGE=$page"
-if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle login=$nLogin side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp dungeonTab=$dungeonTabGold" }
+if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp dungeonTab=$dungeonTabGold" }

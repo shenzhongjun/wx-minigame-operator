@@ -87,7 +87,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxpreflight.ps1` | **开局协议预检：校验档案齐全+打印要点摘要** | 无参数 |
 | `wxgrind.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
 | `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto=模板判定+gated 双击+前台守卫 | `-Pid2 -J` |
-| `wxprobe.ps1` | 状态探针（七态枚举，AUTO_* 用模板距离） | `-Pid2 -Debug` |
+| `wxprobe.ps1` | 状态探针（战斗/结算/弹窗/遮挡粗信号；2026-10-27 TOWN/LOGIN 身份判据退役→OCR `town`/`server`） | `-Pid2 -Debug` |
 | `wxlogin.ps1` | 固化登录链（已接入 CHAR 探针金框自动验证；GOLD_DIALOG 默认停机防顶号误点，目验挂机/已授权后加 -AssumeGold） | `-Char 1..6 -AssumeGold` |
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
@@ -96,7 +96,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
-| `wxpopup.ps1` | **弹窗分类器**：挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/无/未知(红线停)，金确定钮守卫+正文模板 | `-Pid2 -Img` |
+| `wxpopup.ps1` | **弹窗分类器 v2（OCR 化）**：金确定钮守卫(≥400)+正文带 OCR(350,348)-(800,408) 关键字分类——挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/羽毛复活(可点确定)/无/未知(红线停)；v1 像素模板退役（正文位置浮动即全灭，2026-10-27 实战） | `-Pid2 -Img` |
 | `wxstam.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
 | `wxresize.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
 | `wxrecrop.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
