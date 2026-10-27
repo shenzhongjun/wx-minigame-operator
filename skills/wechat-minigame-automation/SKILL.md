@@ -97,7 +97,8 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxstam.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
 | `wxresize.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
 | `wxrecrop.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
-| `wxnav-tower.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段像素断言（A 副本tab金≥150 / B 塔页红≥100 / C 练习高亮金≥50）失败即截图停机 | `-Pid2 -SkipStart` |
+| `wxautoensure.ps1` | **自动战斗快速确保 v2（v1.1.10 新增）**：出战后立即调用，轮询 OCR autobtn（OFF→点 (215,172)→重读验证；ON 优先判定不误关），进程内调用实测 2.0s 开启（旧链 4-5s）；超时/点击超3次 FAIL | `-Pid2 -TimeoutSec` |
+| `wxnav-tower.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段断言（A 副本tab金≥150 / B 塔页红≥100 / **C 练习说明框白字块≥400 (395,195)-(625,268)，v1.1.10**）失败即截图停机 | `-Pid2 -SkipStart` |
 | `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxwait/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/轮询等待指定状态/枚举窗口/文档规则校验（~~wxocrbtn~~ 已删，v1.1.3 并入 wxocr） | 见脚本头 |
 | ~~`wxfarm.ps1`~~ | **已删除（2026-10-26 用户裁决）**：未迁移设计坐标体系（裸屏幕数学，窗口≠1138×708 必错位），且功能已被 wxgrind -AutoRetry 覆盖 | — |
 
