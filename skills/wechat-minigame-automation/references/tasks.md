@@ -57,7 +57,7 @@
 - 范围：不止 wxpopup——所有 OCR 关键字匹配点统一 N 字命中，N 随关键字长度定，宁宽勿严。
 - 已知约束：town「选角」2 字此前零容差定版（选角页标题「选择角色」含同字，容差必撞车）——2 字关键字 N=2 即等效零容差，与旧定版不冲突。
 - 状态：执行中。
-- 结果（2026-10-27 20:4x 完成，攒批待发版）：_wxcommon 新增 Get-WxAutoMinHit（2字=2、3-4字=N-1、5-7字=3、8字+=4）+ Test-WxKwHit 共享判定；wxocr kw 分支缺省自动定值（显式 minhit 保留覆盖）、autobtn 零容差作废改 N=3（两词共享「自动」2字<3 无交叉误判）、town 零容差改 minhit=2（2字等效零容差行为不变）；wxpopup 分类链 5 关键字全改 N 字命中，「重→谲」漏判根因消除。单测 11/11（test-kwhit-unit-2026-10-27.ps1）；离线 server=HIT（误读图）、wxpopup 双图 NONE；3 文件 BOM ✓ Parser 0 ✓。实机 town/charsel/autobtn 复核待用户恢复窗口补（验收时窗口最小化 179×24，几何守卫停机属正确履职）。coords.md/update-log.md 同步。
+- 结果（2026-10-27 20:4x 完成，已随 v1.1.9 发版）：_wxcommon 新增 Get-WxAutoMinHit（2字=2、3-4字=N-1、5-7字=3、8字+=4）+ Test-WxKwHit 共享判定；wxocr kw 分支缺省自动定值（显式 minhit 保留覆盖）、autobtn 零容差作废改 N=3（两词共享「自动」2字<3 无交叉误判）、town 零容差改 minhit=2（2字等效零容差行为不变）；wxpopup 分类链 5 关键字全改 N 字命中，「重→谲」漏判根因消除。单测 11/11（test-kwhit-unit-2026-10-27.ps1）；离线 server=HIT（误读图）、wxpopup 双图 NONE；3 文件 BOM ✓ Parser 0 ✓。实机 town/charsel/autobtn 复核待用户恢复窗口补（验收时窗口最小化 179×24，几何守卫停机属正确履职）。coords.md/update-log.md 同步。
 
 ## town 区域读空排查 + 带边距区域定版（2026-10-27 22:4x，用户红框质询）
 
@@ -77,4 +77,4 @@
 - **2 字零容差铁律（代码修复）**：wxocr.ps1 删除残留 `Test-FuzzyText`（tol=1）兜底——它使「选鱼」对「选角」diff=1 被放行，直接击穿 2 字零容差；charsel 任务 tol 字段删除。**铁律表述：N 字命中=宁宽勿严只对 ≥3 字生效；2 字=N=2=错一个字都不行；任何形式的二次兜底严禁再加。**
 - **困扰来源复盘（用户问「文档哪里造成了困扰」）**：① coords.md 把「设计坐标=1138×708」与「客户区=55px+画布」分离两处、无对照表无实算例，708/653 并存；② wxocr.ps1 残留旧「1 字替换容差」注释与 20:3x 新规则并存，兜底行为互相矛盾；③ wxshot `-Raw` 输出无标题栏画布图，图上量值≠设计坐标（需 +55/S），无档案警示。
 - **验证**：单测 10/10 ALL PASS（冒烟测试\test-minhit-semantics.ps1，核心断言=选鱼 MISS/选角 HIT/巨龙山豚 HIT/巨龙X豚 MISS）；2 文件 Parser 0 ✓；wxdoclint PASS。
-- 状态：完成，攒批待发版（并入下方 20:3x 批次）。
+- 状态：完成，**已随 v1.1.9 发版（2026-10-27 23:2x 用户令）**。
