@@ -10,12 +10,10 @@ $h = Find-GameWindow -Pid2 $Pid2
 if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
 [WXCommon]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 350
-if ([WXCommon]::GetForegroundWindow() -ne $h) {
-    [WXCommon]::SetForegroundWindow($h) | Out-Null
-    Start-Sleep -Milliseconds 600
-    if ([WXCommon]::GetForegroundWindow() -ne $h) { "ERR: game not foreground，拒绝戳"; "DONE"; exit 7 }
-}
+# 前台守卫（2026-10-27 16:5x 用户定版）：不在前台→log 留痕+拉回，重试 2 次仍失败才 STOP
+if (-not (Confirm-WxForeground $h)) { "ERR: game not foreground (拉回重试后仍不在前台)，拒绝戳"; "DONE"; exit 7 }
 $geo = Get-ClientGeometry $h
+if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H))，拒绝戳"; "DONE"; exit 7 }
 
 # 按下
 $p = ConvertTo-ScreenPoint $geo $CX $CY

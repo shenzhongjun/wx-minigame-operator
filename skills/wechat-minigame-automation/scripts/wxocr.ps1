@@ -8,6 +8,13 @@
 #   charsel  选角页标题 (0,56)-(200,115)：含「选择角色」=HIT（选角页身份权威判定）
 #   scr1     第一屏判据 (40,140)-(210,175)：卡1名字区，含「早睡早起身体好」任意3字=HIT（用户红框区域）
 #   scr2     第二屏判据 (40,238)-(210,264)：卡5名字区（实测名字行 y≈241-259），含「豁达自在乐逍遥」任意3字=HIT；x 与 scr1 同宽窄条，上距横幅(232)6px、下距职业行(269)5px
+#   scr1w    第一屏升级判据 (36,130)-(215,204)：卡1名字+职业信息条整块（2026-10-27 用户红框定版），
+#            kw「早睡早起身体好」+ kw2「圣骑士」合并任意3字命中=HIT。宽区域带上下文，解决窄条
+#            在 S≈1.043 大窗下 OCR 读空问题（用户裁定「既然条小了不好判断，那就放大」）；
+#            下界 204 收在公告横幅污染区(206-232)之外，勿跨入。
+#   scr2w    第二屏升级判据 (36,234)-(215,290)：卡5名字+职业信息条整块（2026-10-27 用户红框定版），
+#            kw「豁达自在乐逍遥」+ kw2「重装机兵」合并任意3字=HIT；上界 234 避横幅(232)，
+#            下界 290 收在职业行(269-288)之下、体力行之上，勿随意扩大。
 #   town     主城判据 (158,162)-(250,200)：左上「◀ 选角」按钮深色条，含「选角」=HIT。
 #            ⚠️ 零容差（minhit=0,tol=0）：「选角」仅2字，选角页标题「选择角色」含同字字符集，
 #            任意容差都会撞车（Test-FuzzyText tol=1 时「择角」窗口即命中）；按钮为 HUD 恒定 UI 文字，
@@ -17,6 +24,8 @@
 #            含=HIT。2026-10-27 用户定版：登录页身份唯一判据（「进入游戏」为风格化美术字 OCR 读不动，
 #            已放弃不做任务；旧区域 (440,505)-(735,556) 切字底缘曾致「透人游咙」误读，勿再尝试）。
 # 匹配规则（2026-10-27 用户定版）：名字唯一，kw 任意 3 字命中即 HIT（漏字/错字/乱序免疫）；autobtn 零容差不变
+# kw2（可选，2026-10-27 16:1x 用户定版）：第二关键字**并入字符池**，与 kw 合并去重后任意 minhit 字命中
+#   即 HIT（用户纠正原话：「kw+kw2 一共任意 3 字命中就行了」，不是 kw2 全字命中）
 # ⚠️ 公告横幅污染区 y≈206-232（橙色滚动公告，临时元素）——OCR 区域严禁跨入，scr1/scr2 已避开；
 #    2026-10-27 实测教训：盲扫 195-255 被横幅「…龙脊战魔护腿…」搅成乱码
 # 原理：设计坐标裁剪 → 灰度反相（白字→黑字深底→浅底，-NoInvert 关闭）→ 双三次放大 F 倍
@@ -28,6 +37,8 @@ $tasks = @{
     charsel = @{ x0 = 0;   y0 = 56;  x1 = 200; y1 = 115; kind = 'kw'; kw = '选择角色'; tol = 1 }
     scr1    = @{ x0 = 40;  y0 = 140; x1 = 210; y1 = 175; kind = 'kw'; kw = '早睡早起身体好'; minhit = 3 }
     scr2    = @{ x0 = 40;  y0 = 238; x1 = 210; y1 = 264; kind = 'kw'; kw = '豁达自在乐逍遥'; minhit = 3 }
+    scr1w   = @{ x0 = 36;  y0 = 130; x1 = 215; y1 = 204; kind = 'kw'; kw = '早睡早起身体好'; minhit = 3; kw2 = '圣骑士' }
+    scr2w   = @{ x0 = 36;  y0 = 234; x1 = 215; y1 = 290; kind = 'kw'; kw = '豁达自在乐逍遥'; minhit = 3; kw2 = '重装机兵' }
     town    = @{ x0 = 158; y0 = 162; x1 = 250; y1 = 200; kind = 'kw'; kw = '选角'; minhit = 0; tol = 0 }
     server  = @{ x0 = 488; y0 = 455; x1 = 638; y1 = 492; kind = 'kw'; kw = '巨龙山脉'; minhit = 0; tol = 0 }
 }
@@ -55,6 +66,8 @@ if ($Img -ne "") {
     $hwnd = Find-GameWindow -Pid2 $Pid2
     if ($hwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     $geo = Get-ClientGeometry $hwnd
+    # 小窗守卫（2026-10-27 17:4x 用户定版）：宽 <800 实测 OCR 全读空（S≈0.609 数据），直接停机
+    if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H) < ${WX_MIN_CLIENT_W} width)，OCR 拒读"; exit 7 }
     $bmp = Get-DesignBitmap $geo
 }
 if ($X1 -ge $bmp.Width -or $Y1 -ge $bmp.Height -or $X0 -lt 0 -or $Y0 -lt 0 -or $X0 -gt $X1 -or $Y0 -gt $Y1) {
@@ -146,10 +159,15 @@ if ($kind -eq 'auto') {
     $kw = $tasks[$Task].kw
     $minhit = 3; if ($t -and $t.Contains('minhit')) { $minhit = $t.minhit }
     $tol = 1; if ($t -and $t.Contains('tol')) { $tol = $t.tol }
-    $hit = $text.Contains($kw)
+    # kw2（可选，2026-10-27 用户定版）：第二关键字并入字符池，与 kw 合并去重后任意
+    # minhit 个字命中即 HIT（用户原话：「kw+kw2 一共任意 3 字命中就行了」）
+    $pool = $kw
+    $kw2 = ''
+    if ($t -and $t.Contains('kw2')) { $kw2 = $t.kw2; $pool = "$kw$kw2" }
+    $hit = $text.Contains($kw) -or ($kw2 -ne '' -and $text.Contains($kw2))
     if (-not $hit -and $minhit -gt 0) {
         $cnt = 0
-        foreach ($ch in ($kw.ToCharArray() | Select-Object -Unique)) { if ($text.Contains([string]$ch)) { $cnt++ } }
+        foreach ($ch in ($pool.ToCharArray() | Select-Object -Unique)) { if ($text.Contains([string]$ch)) { $cnt++ } }
         $hit = ($cnt -ge $minhit)
     }
     if (-not $hit) { $hit = Test-FuzzyText $text $kw $tol }

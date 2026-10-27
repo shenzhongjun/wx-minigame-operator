@@ -137,6 +137,40 @@ function ConvertFrom-ScreenPoint {
     }
 }
 
+# ---- 前台守卫共享逻辑（2026-10-27 16:5x 用户定版）：检测到不在前台→log 留痕并拉回前台，
+#      首拉 + 最多 2 次重试仍不在前台才判失败（是否 STOP 由调用方决定）；最小化先 SW_RESTORE。
+#      log 走 Write-Host（信息流），不污染返回值管道。----
+function Confirm-WxForeground([IntPtr]$h, [string]$label = 'game') {
+    if ([WXCommon]::GetForegroundWindow() -eq $h) { return $true }
+    Write-Host "WARN: $(Get-Date -Format 'HH:mm:ss') 检测到 $label 不在前台，拉回前台"
+    if ([WXCommon]::IsIconic($h)) {
+        [WXCommon]::ShowWindow($h, 9) | Out-Null    # SW_RESTORE
+        Write-Host "WARN: $(Get-Date -Format 'HH:mm:ss') 窗口最小化中，已 SW_RESTORE"
+    }
+    for ($i = 1; $i -le 3; $i++) {                  # 首拉 + 2 次重试
+        [WXCommon]::SetForegroundWindow($h) | Out-Null
+        Start-Sleep -Milliseconds 600
+        if ([WXCommon]::GetForegroundWindow() -eq $h) {
+            Write-Host "WARN: $(Get-Date -Format 'HH:mm:ss') 第 $i 次拉回前台成功"
+            return $true
+        }
+        Write-Host "WARN: $(Get-Date -Format 'HH:mm:ss') 第 $i 次拉回失败，仍不在前台"
+    }
+    return $false
+}
+
+# ---- 最小窗口宽度守卫（2026-10-27 17:4x 用户定版）：客户区宽 < 800 判失败（exit 7 由调用方定）。
+#      依据：S≈0.609 (693x460) 实测 town/charsel OCR 全读空（数据见 tasks.md 17:3x 节），
+#      小窗判定不可靠，宁可停机。wxocr -Img 离线路径不受此限（不涉实时窗口）。----
+$WX_MIN_CLIENT_W = 800
+function Test-WxMinClientW([int]$clientW) {
+    if ($clientW -lt $WX_MIN_CLIENT_W) {
+        Write-Host "WARN: client width $clientW < $WX_MIN_CLIENT_W（小窗 OCR 读空敏感区，用户定版停机线）"
+        return $false
+    }
+    return $true
+}
+
 # ---- 最近邻缩放：保留原始 RGB，避免插值灰度污染色彩阈值与白掩码 ----
 function Resize-WxBitmapNearest {
     param([System.Drawing.Bitmap]$src, [int]$w, [int]$h)

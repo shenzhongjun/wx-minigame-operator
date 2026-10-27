@@ -13,20 +13,18 @@ $hwnd = Find-GameWindow -Pid2 $Pid2
 if ($hwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
 [WXCommon]::SetForegroundWindow($hwnd) | Out-Null
 Start-Sleep -Milliseconds 400
-if ([WXCommon]::GetForegroundWindow() -ne $hwnd) {
-    [WXCommon]::SetForegroundWindow($hwnd) | Out-Null
-    Start-Sleep -Milliseconds 600
-    if ([WXCommon]::GetForegroundWindow() -ne $hwnd) { "ERR: game not foreground，拒绝导航"; exit 7 }
-}
+# 前台守卫（2026-10-27 16:5x 用户定版）：不在前台→log 留痕+拉回，重试 2 次仍失败才 STOP
+if (-not (Confirm-WxForeground $hwnd)) { "ERR: game not foreground (拉回重试后仍不在前台)，拒绝导航"; exit 7 }
 $geo = Get-ClientGeometry $hwnd
+if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H))，拒绝导航"; exit 7 }
 "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
 $shot = "C:\Users\zhouyijie\WorkBuddy\游戏\wx-verify\nav_tower_fail.png"
 
 function Invoke-NavClick([int]$x, [int]$y, [int]$delayMs) {
     # 每段点击前重读几何：进塔转场会重申客户区尺寸（1138→1135），避免用过期换算
     $g = Get-ClientGeometry $hwnd
-    $p = ConvertTo-ScreenPoint $g ($x + (Get-Random -Minimum -3 -Maximum 4)) ($y + (Get-Random -Minimum -3 -Maximum 4))
-    Start-Sleep -Milliseconds (Get-Random -Minimum 180 -Maximum 320)
+    $p = ConvertTo-ScreenPoint $g $x $y
+    Start-Sleep -Milliseconds 250
     [WXCommon]::SetCursorPos($p.X, $p.Y) | Out-Null
     Start-Sleep -Milliseconds 100
     [WXCommon]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)

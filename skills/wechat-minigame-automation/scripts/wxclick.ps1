@@ -1,4 +1,4 @@
-﻿param([string]$Steps = "", [int]$J = 4, [int]$Pid2 = 0)
+﻿param([string]$Steps = "", [int]$Pid2 = 0)
 # 点击器（DPI-aware 客户区物理坐标体系）
 # Steps: "x:y:delayAfterMs;x:y:delayAfterMs;w:waitMs;auto"
 #   x:y:d  点击设计坐标 (x,y)（基准 1138x708），delayAfterMs 为点击后等待
@@ -19,13 +19,10 @@ $h = Find-GameWindow -Pid2 $Pid2
 if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
 [WXCommon]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 350
-# 前台守卫（2026-10-24 事故）：mouse_event 是全局点击，前台≠游戏时拒绝，防点进用户窗口
-if ([WXCommon]::GetForegroundWindow() -ne $h) {
-    [WXCommon]::SetForegroundWindow($h) | Out-Null
-    Start-Sleep -Milliseconds 600
-    if ([WXCommon]::GetForegroundWindow() -ne $h) { "ERR: game not foreground (被其它窗口抢占)，拒绝点击"; "DONE"; exit 7 }
-}
+# 前台守卫（2026-10-24 事故；2026-10-27 16:5x 用户定版）：不在前台→log 留痕+拉回，重试 2 次仍失败才 STOP
+if (-not (Confirm-WxForeground $h)) { "ERR: game not foreground (拉回重试后仍不在前台)，拒绝点击"; "DONE"; exit 7 }
 $geo = Get-ClientGeometry $h
+if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H) < ${WX_MIN_CLIENT_W} width)，拒绝点击"; "DONE"; exit 7 }
 "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
 
 # ---- 内联确保自动战斗开启（唯一判据=按钮文字模板 / gated点击上限2 / 35s 窗口 / 全程日志）----
@@ -60,7 +57,7 @@ function Ensure-Auto {
             if ($clicks -lt 2) {
                 $clicks++
                 $offStreak = 0
-                $p = ConvertTo-ScreenPoint $g ($WX_BTN_CLICK_X + (Get-Random -Minimum -4 -Maximum 5)) ($WX_BTN_CLICK_Y + (Get-Random -Minimum -3 -Maximum 4))
+                $p = ConvertTo-ScreenPoint $g $WX_BTN_CLICK_X $WX_BTN_CLICK_Y
                 [WXCommon]::SetCursorPos($p.X, $p.Y) | Out-Null
                 Start-Sleep -Milliseconds 120
                 [WXCommon]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
@@ -69,7 +66,7 @@ function Ensure-Auto {
                 "click auto-button t=${t}s (click $clicks of 2, gated)"
                 Start-Sleep -Milliseconds 3000
             } else {
-                # 两次 gated 点击后仍明确 OFF = 点击被游戏吞掉 → 停机，走截图接续协议
+                # 两次 gated 点击后仍明确 OFF = 异常（坐标偏差/状态异常）→ 停机，走截图接续协议
                 "AUTO_ENSURE_FAIL(ms=$([int]$sw.ElapsedMilliseconds) clicks=$clicks reason=two_gated_clicks_failed)"
                 "DONE"; exit 3
             }
@@ -92,13 +89,13 @@ foreach ($step in $Steps.Split(";")) {
   if ($parts.Length -gt 2) { $d = [int]$parts[2] }
   # 每步点击前重读几何：窗口在多次点击间可能被移动/改尺寸
   $g = Get-ClientGeometry $h
-  $p = ConvertTo-ScreenPoint $g ($x + (Get-Random -Minimum (-$J) -Maximum ($J + 1))) ($y + (Get-Random -Minimum (-$J) -Maximum ($J + 1)))
+  $p = ConvertTo-ScreenPoint $g $x $y
   $ax = $p.X; $ay = $p.Y
-  Start-Sleep -Milliseconds (Get-Random -Minimum 180 -Maximum 320)
+  Start-Sleep -Milliseconds 250
   [WXCommon]::SetCursorPos($ax, $ay) | Out-Null
-  Start-Sleep -Milliseconds (Get-Random -Minimum 80 -Maximum 150)
+  Start-Sleep -Milliseconds 100
   [WXCommon]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
-  Start-Sleep -Milliseconds (Get-Random -Minimum 50 -Maximum 100)
+  Start-Sleep -Milliseconds 70
   [WXCommon]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
   "click=$x,$y -> $ax,$ay"
   if ($d -gt 0) { Start-Sleep -Milliseconds $d }
