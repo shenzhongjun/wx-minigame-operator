@@ -34,6 +34,8 @@ if ($Img -ne "") {
 } else {
     $h = Find-GameWindow -Pid2 $Pid2
     if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
+    # 前台守卫（todo 第3项，2026-10-27 接线）：不在前台先拉回，防读到旧画面假数据
+    if (-not (Confirm-WxForeground $h 'probe')) { "ERR: game not foreground，探测拒绝（防假数据）"; exit 7 }
     $geo = Get-ClientGeometry $h
     "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
     $bmp = Get-DesignBitmap $geo

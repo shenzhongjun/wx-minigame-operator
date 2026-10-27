@@ -84,7 +84,8 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxgrind.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
 | `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto=模板判定+gated 双击+前台守卫 | `-Pid2 -J` |
 | `wxprobe.ps1` | 状态探针（战斗/结算/弹窗/遮挡粗信号；2026-10-27 TOWN/LOGIN 身份判据退役→OCR `town`/`server`） | `-Pid2 -Debug` |
-| `wxlogin.ps1` | 固化登录链 v1.1.6：GOLD_DIALOG 先 wxpopup OCR 分类——POPUP_IDLE（挂机）自动点确定重登，其余类别（顶号/涉钱/未知）红线停机；-AssumeGold=人工强制放行兜底 | `-Char 1..6 -AssumeGold` |
+| `wxlogin.ps1` | 固化登录链 v3（2026-10-27 拆分定版：只管登录）：GOLD_DIALOG 先 wxpopup OCR 分类——POPUP_IDLE（挂机）自动点确定重登，其余类别（顶号/涉钱/未知）红线停机；登录页进入游戏→OCR 确认选角页**即止**（角色选择移交 wxcharsel；旧卡表 5/6=(139/414,536) 已删——(139,536) 实为翻页按钮） | `-AssumeGold` |
+| `wxcharsel.ps1` | **选角专职（2026-10-27 新增，卡表单源）**：起始态自适应进选角页（主城点「选角」带3次重试）→ scr1w/scr2w 判屏 → 按需切屏复核 → 幂等双击目标卡；`-StartGame` 进游戏+town 终态确认，默认停选角页。卡表 1(138,342) 2(421,342) 3(704,340) 4(987,340) 5(138,370) 6(421,370)；7/8 锁槽红线禁点 | `-Char 1..6 -StartGame` |
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocrbtn OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |

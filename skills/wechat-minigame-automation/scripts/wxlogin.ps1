@@ -1,7 +1,9 @@
-﻿param([int]$Char = 1, [int]$Pid2 = 0, [switch]$AssumeGold)
-# 固化登录链 v2（2026-10-26 OCR 优先改造，用户定版：验证一律 OCR 优先）
-# 流程：金色弹窗处理(700,513) → 登录页进入游戏(571,527) → OCR 验证选角页(「选择角色」标题)
-#       → 双击目标角色卡(幂等兜底) → 开始游戏(1018,634)
+﻿param([int]$Pid2 = 0, [switch]$AssumeGold)
+# 固化登录链 v3（2026-10-27 用户定版拆分：登录链归 wxlogin，选角归 wxcharsel）
+# 流程：金色弹窗处理(700,513) → 登录页进入游戏(571,527) → OCR 验证选角页(「选择角色」标题) → 到此即止
+# 角色选择请跑 wxcharsel.ps1 -Char N [-StartGame]（卡表单源在 wxcharsel，判屏切屏幂等双击齐全）
+# 历史教训：本脚本旧版卡表 5/6=(139/414,536) 系滚动单页时代旧值，(139,536) 实为翻页按钮——
+#   -Char 5 会翻页而非选卡，该路径从未被实测（冒烟件自带正确卡表不依赖本脚本）。v1.1.8 起删除卡表。
 # 验证哲学：选角页身份=wxocr -Task charsel（OCR「选择角色」标题，粗字形抗缩放）；
 #   不再做金框像素回读（细描边小窗混色不可靠，2026-10-26 退役）；点卡操作幂等（双击无副作用，纯冗余兜底）。
 #   ⚠️ 残余风险（用户知情接受）：点击未命中目标卡热区且当前选中≠目标角色 → 带错角色进游戏；
@@ -10,8 +12,6 @@
 #       POPUP_IDLE（挂机「重新登录」）→ 自动点确定 (700,513) 重登，两轮实战零异常后固化；
 #       其余类别（顶号「其他设备」/扩展券/正文读不出）红线不变：停机请示，绝不自动点。
 #       -AssumeGold 保留为人工强制放行开关（跳过分类直接点）。
-# 角色卡坐标（未滚动态直点）：1(138,342) 2(421,342) 3(704,340) 4(987,340)（3/4 于 2026-10-26 实测重标：按卡1→2 间距 283 等距外推） 5(139,536) 6(414,536)
-# 选角页共三屏：默认第一屏(1-4)；点 (139,536) 切第二屏(5-8，行 y=370)；7/8 槽位=锁图标严禁点击（建角色弹窗红线）。详见 coords.md
 $scripts = $PSScriptRoot
 function Get-State {
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
@@ -52,9 +52,6 @@ function Get-PopupClass {
     foreach ($line in $out) { if ("$line" -match 'POPUP=(POPUP_\w+)') { return $Matches[1] } }
     return "POPUP_UNKNOWN"
 }
-$card = @{ 1 = "138:342"; 2 = "421:342"; 3 = "704:340"; 4 = "987:340"; 5 = "139:536"; 6 = "414:536" }
-if (-not $card.ContainsKey($Char)) { "ERR: Char must be 1-6"; exit 1 }
-
 $st = Get-State
 "start state=$st"
 if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
@@ -86,12 +83,4 @@ if (Test-TownOcr) {
 if (-not (Test-CharSel)) {
     "STOP: OCR 15s 内未确认选角页（「选择角色」标题未命中），截图人工核对 (last state=$st)"; exit 9
 }
-"charsel confirmed by OCR"
-# 双击目标卡（幂等；无金框回读——用户定版，残余风险见头部注释）
-Invoke-Click "$($card[$Char]):1500"
-Invoke-Click "$($card[$Char]):1500"
-"char$Char card clicked (double, idempotent)"
-Invoke-Click "1018:634:5000"
-$st = Get-State
-$townHit = if (Test-TownOcr) { "HIT" } else { "MISS" }
-"login chain done (final state=$st town_ocr=$townHit)；主城可能报 GOLD_DIALOG(金图标误报)/UNKNOWN，异常请截图核对"
+"charsel confirmed by OCR —— 登录链到此即止；角色选择请跑 wxcharsel.ps1 -Char N [-StartGame]"
