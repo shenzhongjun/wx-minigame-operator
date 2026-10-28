@@ -42,13 +42,13 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 - **仅支持当前这台电脑**（用户 2026-10-26 定版：公司机/双机支持废止，公司代码与档案已删除；跨机器移植不在范围内）。
 - 屏幕/DPI：2560×1440 @125%；坐标体系：设计坐标 1138×708 + 运行时等比换算（DPI-aware）。
 
-- **客户区结构（2026-10-26 实测定版；权威表述唯一版本=coords.md 头部「坐标体系权威表述」+ _wxcommon.ps1 几何注释）**：`[微信内嵌标题栏 固定 55px，不随窗口缩放] + [游戏画布 等比缩放]`。几何层换算 `S=min(宽/1138, (高-55)/653)`，纵向 `screen_y = OY + 55 + (design_y-55)×S`——**基准 1138×708 时 S=1 与旧模型重合，所有档案坐标零失效；任意窗口尺寸（含非等比/缩小窗 0.40×）均可准确点按**。chrome 常量 `$WX_CHROME_H=55` 由 preflight 自动审计（wxcanvas.ps1 实测比对），不符即停机。**⚠️ 铁律（2026-10-27 23:0x）：换算严禁手算——正向 `ConvertTo-ScreenPoint`、反向 `ConvertFrom-ScreenPoint`，标定脚本同样必须调函数；wxshot `-Raw` 截图无量纲≠设计坐标（design_y=55+y/S）。**
+- **客户区结构（2026-10-26 实测定版；**权威表述唯一版本=coords.md 头部「坐标体系权威表述」+「画布垂直居中」两节，换算公式/双语义/居中规则一律以彼处为准，本文件不重复**）**：`[微信内嵌标题栏 固定 55px，不随窗口缩放] + [游戏画布 等比缩放+居中]`。chrome 常量 `$WX_CHROME_H=55` 由 preflight 自动审计（wxcanvas.ps1 实测比对），不符即停机。**⚠️ 铁律：换算严禁手算——正向 `ConvertTo-ScreenPoint`、反向 `ConvertFrom-ScreenPoint`，标定脚本同样必须调函数；wxshot `-Raw` 截图≠设计坐标。**
 
 ## 1. 定位目标窗口
 
 1. 一个游戏一个 `WeChatAppEx.exe` 进程，用窗口标题匹配：`Get-Process WeChatAppEx | Select Id,MainWindowTitle`，pid 传 `-Pid2`。
 2. 报 `ERR: window not found` → 重查进程列表确认窗口标题还在。
-3. URL 形如 `https://servicewechat.com/<appid>/<version>/page-frame.html`（勇士之心 appid `wx77d3595d9d76a623`）。
+3. URL 形如 `https://servicewechat.com/<appid>/<version>/page-frame.html`（appid/区服/appVersion 等游戏标识唯一出处=coords.md 头部）。
 
 ## 2. 坐标校准
 
@@ -145,9 +145,9 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 | 症状 | 原因 | 处理 |
 |---|---|---|
-| 「在此系统上禁止运行脚本」 | WorkBuddy PowerShell 会话 Restricted | 子进程跑：`powershell -NoProfile -ExecutionPolicy Bypass -File <脚本> <参数>` |
-| CopyFromScreen 报「句柄无效」 | 屏幕锁定/会话切走 | 停手；用户解锁后自愈，恢复后再核状态 |
-| 截图是纯色 4~5KB | 锁屏/遮挡/最小化（事件14 复盘定论，非渲染假死） | wxprobe=OCCLUDED / wxshot WARN 已自动识别；解锁+wxrestore 后重截，仍异常停手问用户 |
+| 「在此系统上禁止运行脚本」 | WorkBuddy PowerShell 会话 Restricted | 环境坑唯一归属=`run-environment-pitfalls.md` §1（Bypass 子进程 + `-WindowStyle Hidden` 等执行铁律） |
+| CopyFromScreen 报「句柄无效」 | 屏幕锁定/会话切走 | 详见 `run-environment-pitfalls.md` §4；停手，用户解锁后自愈 |
+| 截图是纯色 4~5KB | 锁屏/遮挡/最小化（事件14 定论，非渲染假死） | 详见 `run-environment-pitfalls.md` §4；解锁+wxrestore 后重截，仍异常停手问用户 |
 | 点击落进用户其它窗口 | SetForegroundWindow 被前台锁拦截 | wxclick/wxpoke 已带前台守卫（拒点）；复现→停手 |
 | 按钮模板全 UNKNOWN（dist 双高） | 按钮被遮挡/特效扫过/真实布局重排 | wxshot 人工核对；同比例尺寸下仍持续 UNKNOWN 才重裁模板（单纯尺寸变化已由换算吸收） |
 | **OCR 任务区整区读空（raw=[]），页面内容目视正常** | **画布垂直居中漂移/区域边距过紧（事件21）** | 同图宽带扫描定位文字真实位置再重标区域；根治机制（CANVASTOP）见 coords.md 权威表述 |
