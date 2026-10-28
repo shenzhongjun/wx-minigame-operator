@@ -22,6 +22,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/update-log.md` | 踩坑/优化流水缓冲区 |
 | `references/incidents.md` | 事件根因档案（事件1-19） |
 | `references/todo-scripts.md` | 待办清单（带教/悬案/废弃标记） |
+| `references/run-environment-pitfalls.md` | **运行环境坑全集**（执行方式/编码语法/输出捕获/桌面窗口/成本纪律；拉子进程必带 `-WindowStyle Hidden`） |
 | `scripts/` `assets/` | 全部自动化脚本；自动战斗模板图 |
 | 专家包 `wx-minigame-operator` | 角色纪律：开局协议/致命五坑/熔断/红线/收尾 |
 
@@ -147,6 +148,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | 截图是纯色 4~5KB | 锁屏/遮挡/最小化（事件14 复盘定论，非渲染假死） | wxprobe=OCCLUDED / wxshot WARN 已自动识别；解锁+wxrestore 后重截，仍异常停手问用户 |
 | 点击落进用户其它窗口 | SetForegroundWindow 被前台锁拦截 | wxclick/wxpoke 已带前台守卫（拒点）；复现→停手 |
 | 按钮模板全 UNKNOWN（dist 双高） | 按钮被遮挡/特效扫过/真实布局重排 | wxshot 人工核对；同比例尺寸下仍持续 UNKNOWN 才重裁模板（单纯尺寸变化已由换算吸收） |
+| **OCR 任务区整区读空（raw=[]），页面内容目视正常** | **画布垂直居中漂移/区域边距过紧（事件21）** | 同图宽带扫描定位文字真实位置再重标区域；根治机制（CANVASTOP）见 coords.md 权威表述 |
 | 脚本报 `ERR: client=… 长宽比/缩放系数不符` | 窗口被拉成非设计比例、过大过小或尺寸读取异常 | 跑 `wxresize.ps1` 复位（同比例任意尺寸均可，日常无需复位）；仍异常→停止问用户，不要改设计基准常量迁就窗口 |
 | 点了没反应、光标不在预期位置 | delta 失效/窗口被移动 | 重新校准（读最新 origin） |
 | 光标在按钮上没反应 | 热区偏移 | 下移 +30~50px 重试一次 |

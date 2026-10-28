@@ -95,7 +95,8 @@ function Find-GameWindow {
 # ═══════════════════════════════════════════════════════════════════
 # 55px 内嵌标题栏模型（唯一权威表述，2026-10-26 wxcanvas 两尺寸实测定版）：
 #   客户区物理结构 = [顶部 55 物理px 微信内嵌标题栏（白条「勇士之心」+胶囊按钮，固定不缩放）]
-#                    + [游戏画布（随窗口等比缩放，横向居中留边）]
+#                    + [游戏画布（随窗口等比缩放；横向居中留边 + **垂直居中留边，上下黑条等宽**，
+#                       2026-10-28 用户定版——旧版漏记垂直居中，曾致 OCR 区域随窗口缩放漂移读空）]
 #   设计坐标系 1138x708 = 虚拟截图坐标系：0-54 行「占位」表示标题栏（不属于游戏画面），
 #   游戏内容全部在 设计 55-707 行（1138x653）。coords.md/模板/OCR 区域全部用设计坐标。
 #   画布缩放 S = min(W/1138, (H-55)/653)——55 只出现在「减去」这一处，S 与标题栏无关。
@@ -133,7 +134,13 @@ function Get-ClientGeometry {
         }
     }
     $offX = ($W - $WX_DESIGN_W * $s) / 2
-    [pscustomobject]@{ W = $W; H = $H; OX = $pt.X; OY = $pt.Y; S = $s; SX = $sx; SY = $sy; OFFX = $offX; OFFY = $ch; CHROME = $ch }
+    # 画布物理顶边（2026-10-28 用户定版：游戏画布在标题栏下方区域**垂直居中**，上下黑条等宽）。
+    # 垂直富余 = (H-55) - 653*S，恒 >=0（S 取 min 保证）；画布顶 = 55 + 富余/2。
+    # ⚠️ OFFY 保持 = chrome(55)：历史档案坐标体系以「顶贴模型」语言标定，点击换算沿用旧语义
+    #    （标定偏差与换算偏差互相抵消，实测准确，禁动）；CANVASTOP 仅供抓图归一化使用，
+    #    保证归一化位图内容与窗口尺寸无关（根治 OCR 区域随缩放漂移）。
+    $canvasTop = $ch + (($H - $ch) - ($WX_DESIGN_H - $ch) * $s) / 2
+    [pscustomobject]@{ W = $W; H = $H; OX = $pt.X; OY = $pt.Y; S = $s; SX = $sx; SY = $sy; OFFX = $offX; OFFY = $ch; CANVASTOP = $canvasTop; CHROME = $ch }
 }
 
 # ---- 设计坐标 → 屏幕坐标（点击/采样前调用）----
@@ -229,33 +236,34 @@ function Resize-WxBitmapNearest {
 function Get-DesignBitmap {
     param($g, [switch]$Raw)
     $vw = [int][math]::Round($WX_DESIGN_W * $g.S)
-    $vh = [int][math]::Round(($WX_DESIGN_H - $g.OFFY) * $g.S)
+    $vh = [int][math]::Round(($WX_DESIGN_H - $g.CHROME) * $g.S)
     $cx = [int][math]::Round($g.OFFX)
     $src = New-Object System.Drawing.Bitmap $vw, $vh
     $gr = [System.Drawing.Graphics]::FromImage($src)
-    $gr.CopyFromScreen($g.OX + $cx, $g.OY + $g.OFFY, 0, 0, (New-Object System.Drawing.Size $vw, $vh))
+    # 从画布真实顶边（垂直居中位置）抓取，归一化后内容与窗口尺寸无关（2026-10-28 根治）
+    $gr.CopyFromScreen($g.OX + $cx, $g.OY + $g.CANVASTOP, 0, 0, (New-Object System.Drawing.Size $vw, $vh))
     $gr.Dispose()
     if ($Raw) { return $src }
-    $canvas = Resize-WxBitmapNearest $src $WX_DESIGN_W ($WX_DESIGN_H - $g.OFFY)
+    $canvas = Resize-WxBitmapNearest $src $WX_DESIGN_W ($WX_DESIGN_H - $g.CHROME)
     if (-not [object]::ReferenceEquals($canvas, $src)) { $src.Dispose() }
     $dst = New-Object System.Drawing.Bitmap $WX_DESIGN_W, $WX_DESIGN_H
     $g2 = [System.Drawing.Graphics]::FromImage($dst)
     $g2.Clear([System.Drawing.Color]::White)
-    $g2.DrawImage($canvas, 0, $g.OFFY)
+    $g2.DrawImage($canvas, 0, $g.CHROME)
     $g2.Dispose()
     if (-not [object]::ReferenceEquals($canvas, $dst)) { $canvas.Dispose() }
     return $dst
 }
 
 # ---- 抓取设计坐标区域并归一化到该区域设计尺寸（自动战斗按钮等小区域用）----
-# 纵向按画布映射：screen_y = OY + 标题栏 + (design_y-55)*S（区域恒在设计 55 行以下，无需白边处理）
+# 纵向按画布映射：screen_y = OY + 画布顶(垂直居中) + (design_y-55)*S（区域恒在设计 55 行以下）
 function Get-DesignRegion {
     param($g, [int]$x0, [int]$y0, [int]$x1, [int]$y1)
     $dw = $x1 - $x0 + 1; $dh = $y1 - $y0 + 1
     $sw = [math]::Max(1, [int][math]::Round($dw * $g.S))
     $sh = [math]::Max(1, [int][math]::Round($dh * $g.S))
     $sx = [int][math]::Round($g.OFFX + $x0 * $g.S)
-    $sy = [int][math]::Round($g.OFFY + ($y0 - $g.OFFY) * $g.S)
+    $sy = [int][math]::Round($g.CANVASTOP + ($y0 - $g.CHROME) * $g.S)
     $src = New-Object System.Drawing.Bitmap $sw, $sh
     $gr = [System.Drawing.Graphics]::FromImage($src)
     $gr.CopyFromScreen($g.OX + $sx, $g.OY + $sy, 0, 0, (New-Object System.Drawing.Size $sw, $sh))
