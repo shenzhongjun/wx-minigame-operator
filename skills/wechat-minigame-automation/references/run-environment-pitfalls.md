@@ -18,7 +18,8 @@
 
 ## 2. 编码与语法（PS 5.1）
 
-- **.ps1 含中文必须 UTF-8 带 BOM**：无 BOM → 乱码+伪语法错误。Edit/Write 后转 BOM，并用 Parser::ParseFile 校验 0 错误。
+- **任何 .ps1（含一次性脚本）落盘后、执行前必须双校验**：① BOM 前 3 字节=EF BB BF（无 BOM → 中文注释后代码行被吞 + 中文路径乱码，静默不报错）；② `Parser::ParseFile` 0 错误。不过不准跑（事件21）。
+- **补 BOM 唯一姿势**：`[IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p,[Text.Encoding]::UTF8), (New-Object Text.UTF8Encoding $true))`；**严禁 `Get-Content -Raw` 回写**（ANSI 读固化乱码）。
 - `&&` / `||` 链式不可用（解析错误）→ `A; if ($?) { B }`。
 - `&*>` 全量重定向不可用（v1.1.10 冒烟实证）→ 分开 `>` 与 `2>&1`，或 `*>` 用于 -Command 内层。
 - **布尔返回函数的日志必须 Write-Host**：裸字符串输出会成为函数返回值的一部分，被 `if (-not fn)` 这类调用按返回值吞掉，失败分支被废（charswitch 冒烟教训）。

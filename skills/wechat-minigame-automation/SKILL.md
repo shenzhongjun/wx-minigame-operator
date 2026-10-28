@@ -7,6 +7,8 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 腾讯系小游戏跑在 `WeChatAppEx.exe` 宿主里，画面全是 canvas：UI 自动化树只有一个 document 加一堆无标签 image，**没有任何可读按钮**。所有交互只能「点击/探针脚本 → 像素判定状态」。
 
+> **🚨 铁律：任何 .ps1（含一次性脚本）落盘后必须 BOM（前3字节=EF BB BF）+ Parser 0 错误双校验，过了才准执行，无例外。补 BOM 严禁 `Get-Content -Raw`（固化乱码）。做法见 `run-environment-pitfalls.md` §2。**
+
 
 ## 档案路由索引（执行用；结构定义与归属规则唯一权威源 = `管理新规.md`）
 

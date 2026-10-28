@@ -52,10 +52,11 @@ if ($Img -ne "") {
 $RX0=440; $RY0=470; $RX1=800; $RY1=560
 # 体力弹窗绿色文字区
 $SX0=420; $SY0=380; $SX1=760; $SY1=540
-# 结算暗红按钮扫描带
-$BX=915; $BY0=225; $BH=220
-# 底部血条区 —— AUTO_* 的必要条件（排除非战斗页白字干扰）
-$HX0=480; $HY0=655; $HX1=700; $HY1=680
+# 结算暗红按钮扫描带（v1.1.14 重标定 2026-10-28：按钮面板主体 x849-971 实测，BX 915→900；
+#   离线 9 状态: settle2col=16 / settle3col=19 / tower=25(锁定 TOWER 行为) / 其余 0）
+$BX=900; $BY0=225; $BH=220
+# 底部血条区 —— AUTO_* 的必要条件（排除非战斗页白字干扰）（v1.1.14: x0 480→440 实测条体 451-677）
+$HX0=440; $HY0=655; $HX1=700; $HY1=680
 # 登录页「进入游戏」白色大字区（LX0-LY1 常量已随 LOGIN_PAGE 退役删除，2026-10-27；OCR 判据=wxocr server 任务）
 # 左侧分类栏白字区（排除登录页误报）
 $NX0=30; $NY0=130; $NX1=160; $NY1=520
@@ -107,17 +108,12 @@ $dOn  = [math]::Round((Get-WxJaccard $live $tpl.On), 3)
 $dOff = [math]::Round((Get-WxJaccard $live $tpl.Off), 3)
 $btnMatch = (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10))
 
-# 副本页金 tab 检测（PAGE=DUNGEON 判据；惰性计算：仅非战斗/非结算/非金弹窗页才算，省 ~3.5 万次 GetPixel）
+# 副本页金 tab 检测（PAGE=DUNGEON 判据）已退役（2026-10-28 用户裁决）：归一化根治后判据失效
+#   （塔页金元素 y159-260，本区仅 8 hits；扩区则主城金 79 vs 塔页 21 无法阈值切分），且无外部消费方，
+#   页面身份一律 OCR 优先（2026-10-27 定版）。详录 incidents 事件21 同期 CHANGELOG [1.1.14]。
 # ⚠️ 选角页金框检测（CHAR1-6）已于 2026-10-26 整体退役（用户定版：验证一律 OCR 优先）——
 #   金框细描边在缩小窗（S≈0.5）下抗锯齿混色致阈值全灭，且曾引发放宽阈值→tab 门控误报连锁；
 #   选角页身份改由 wxocr.ps1 -Task charsel 权威判定（读「选择角色」标题，粗字形抗缩放）。
-$dungeonTabGold = 0
-if (-not $btnMatch -and $nSettle -lt 10 -and $nGold -lt 150) {
-    for ($y = 140; $y -le 205; $y += 2) { for ($x = 30; $x -le 160; $x += 2) {
-        $c = $bmp.GetPixel($x, $y)
-        if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $dungeonTabGold++ }
-    } }
-}
 $bmp.Dispose()
 $state = "UNKNOWN"
 # 状态机（2026-10-25 晚 PAGE 重标定；2026-10-27 TOWN_PAGE+LOGIN_PAGE 退役——
@@ -134,17 +130,16 @@ elseif ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)                   { $state 
 elseif ($nStam   -ge 60)                                               { $state = "STAMINA_POP" } # 最后判：战斗画面绿色特效会污染 stamina 区
 "STATE=$state"
 # PAGE 附加行（信息用，页面身份签名标定 2026-10-25：主城 193/186、副本 side=461、选角 side=486+、塔页 16-22/17-23、世界地图全 0）
-# ⚠️ 选角页权威判定=wxocr -Task charsel（OCR「选择角色」标题）；此处 side 兜底仅作粗信号，副本页 side=461 也会过线，
-#    区分靠 dungeonTabGold 抢跑——小窗下若金 tab 亦混色衰减，PAGE 可能误报 CHARSEL，关键流程以 OCR 为准（2026-10-26 用户定版）
+# ⚠️ 选角页权威判定=wxocr -Task charsel（OCR「选择角色」标题）；此处 side 兜底仅作粗信号，副本页 side=461 也会过线
+#    （DUNGEON 抢跑已退役），副本页可能报 CHARSEL，关键流程以 OCR 为准（2026-10-26 用户定版）
 $page = switch -regex ($state) {
     "SETTLE_PAGE|AUTO_ON|AUTO_OFF" { if ($nSettle -ge 10) { "SETTLE" } else { "BATTLE" } }
     "TOWER_PAGE" { "TOWER" }
     default {
-        if ($dungeonTabGold -ge 40) { "DUNGEON" }
-        elseif ($nSide -ge 400) { "CHARSEL" }
+        if ($nSide -ge 400) { "CHARSEL" }
         elseif (($nSide -lt 50) -and ($nGold -lt 50) -and ($nSettle -lt 5)) { "WORLD_MAP" }
         else { "UNKNOWN" }
     }
 }
 "PAGE=$page"
-if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp dungeonTab=$dungeonTabGold" }
+if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp" }
