@@ -49,7 +49,7 @@ if ($state -eq "UNKNOWN" -and $maskPx -ge 60 -and -not $NoOcr) {
     $ocrArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'wxocr.ps1'), '-Task', 'autobtn')
     if ($Img -ne "") { $ocrArgs += @('-Img', $Img) } else { $ocrArgs += @('-Pid2', "$Pid2") }
     $os = "UNKNOWN"; $ot = ""
-    foreach ($line in (& powershell @ocrArgs 2>&1)) {
+    foreach ($line in (& "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" @ocrArgs 2>&1)) {
         if ($line -match '^OCR=autobtn=(\w+)') { $os = $Matches[1] }
         if ($line -match 'raw=\[(.*)\]') { $ot = $Matches[1] }
     }

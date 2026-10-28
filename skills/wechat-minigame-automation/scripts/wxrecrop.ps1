@@ -94,8 +94,8 @@ $common = $common.Replace("`$WX_BTN_X0 = $WX_BTN_X0", "`$WX_BTN_X0 = $x0").Repla
 
 # --- 5. 离线验证：新进程加载新配置，dist 应 0/交叉≥0.3（降 EAP：子进程 stderr 不再炸主脚本）---
 $ErrorActionPreference = 'Continue'
-$outOff = & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxautostate.ps1" -Img $ImgOff 2>&1
-$outOn  = & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxautostate.ps1" -Img $ImgOn 2>&1
+$outOff = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxautostate.ps1" -Img $ImgOff 2>&1
+$outOn  = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxautostate.ps1" -Img $ImgOn 2>&1
 $ErrorActionPreference = 'Stop'
 $offStr = ($outOff | ForEach-Object { "$_" }) -join ' '
 $onStr  = ($outOn | ForEach-Object { "$_" }) -join ' '

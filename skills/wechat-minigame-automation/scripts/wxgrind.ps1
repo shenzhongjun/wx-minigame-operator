@@ -59,7 +59,7 @@ function Invoke-Probe {
     # 2026-10-26 修复：原 @q 字符串展开把 "-Quick"/"" 绑定到 wxprobe 首位置参数 [int]$Pid2 → 绑定错误秒退 → ERR 停机；
     # -Quick:$Quick 经 -File 传参 bool 字符串化也炸。数组 splat 中 "-Quick" 会被当参数名，是唯一可靠传法。
     $xargs = @(); if ($Quick) { $xargs += "-Quick" }
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 @xargs 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 @xargs 2>&1
     $state = "ERR"
     foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { $state = $Matches[1] } }
     return $state
@@ -71,7 +71,7 @@ function Invoke-ProbeHeal {
     $st = Invoke-Probe -Quick:$Quick
     if ($st -eq "ERR") {
         "HEAL: probe ERR -> wxresize -> reprobe"
-        & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxresize.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 1
+        & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxresize.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 1
         Start-Sleep -Milliseconds 800
         $st = Invoke-Probe -Quick:$Quick
     }
@@ -79,7 +79,7 @@ function Invoke-ProbeHeal {
 }
 function Invoke-Poke {
     # 轮盘保活戳（用户方案：左下角轮盘任何画面绝对安全——用户在玩时戳一下也无妨，无需探测）
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpoke.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 2
+    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpoke.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 2
 }
 # 120s 节流（用户 2026-10-24 定版：120s 一戳足够避开挂机弹窗，无需更频）
 $script:lastPoke = Get-Date
@@ -90,7 +90,7 @@ function Invoke-PokeIfDue {
     }
 }
 function Invoke-Click([string]$steps) {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
+    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
 function Invoke-PopupGuard {
     # 2026-10-26 新增：GOLD_DIALOG 持续时用 wxpopup 分类——
@@ -100,7 +100,7 @@ function Invoke-PopupGuard {
     # 其余（顶号/扩展券/未知）→ 返回 "STOP"，调用方按红线停机。
     # 返回：OK=已消弹窗可继续 / LOGIN=已被踢登录页 / STOP=红线停机
     # 依据：wxpoke 实测无法重置游戏挂机计时（2026-10-26 圣殿挂机弹窗 115s 戳间隔下仍复现）。
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
     $joined = ($out -join " ")
     # 2026-10-28（事件20 移植）：wxpopup 判 NONE=画面无真弹窗（probe 被金边装饰提示框欺骗的假 GOLD）
     #   → 返回 "NONE"，调用方继续等待/重探，不停机不点击。
@@ -111,7 +111,7 @@ function Invoke-PopupGuard {
         Start-Sleep -Seconds 2
         $after = Invoke-ProbeHeal
         # 2026-10-27：LOGIN_PAGE 探针退役，登录页身份=wxocr server 任务（用户定版 OCR 优先）
-        $loginOut = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1 | Out-String
+        $loginOut = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1 | Out-String
         if ($loginOut -match 'OCR=server=HIT') { Write-Host "GUARD: login page behind popup (wxocr server HIT) -> kicked"; return "LOGIN" }
         return "OK"
     }
@@ -190,7 +190,7 @@ for ($i = 1; $i -le $Rounds; $i++) {
     #      其布局常量/锚点已被 v1.1.10/11 两次变更甩下，wxprobe AUTO 态仅存诊断用途）。
     #      无条件每场必调：ON 优先判定（已开 ~1s 返回 0 点击），不再依赖 probe AUTO_OFF 触发。
     "round ${i}: ensure auto (wxautoensure)"
-    $ens = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxautoensure.ps1" -Pid2 $Pid2 -TimeoutSec 30 2>&1
+    $ens = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxautoensure.ps1" -Pid2 $Pid2 -TimeoutSec 30 2>&1
     $ens | ForEach-Object { "$_" }
     if (($ens -join "`n") -notmatch 'AUTO_ENSURED') { "STOP: auto ensure failed"; exit 3 }
     # 4) 等战斗结束（下一轮的等结算负责等待）

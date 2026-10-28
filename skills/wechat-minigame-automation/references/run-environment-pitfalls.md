@@ -10,7 +10,7 @@
 - **会话 ExecutionPolicy=Restricted**：直接跑 .ps1 必报「禁止运行脚本」。一律子进程：`powershell -NoProfile -ExecutionPolicy Bypass -File <脚本> <参数>`。
 - **子进程必加 `-WindowStyle Hidden`**（2026-10-28 事故定版）：不加会弹出可见蓝色控制台，抢前台+遮挡游戏窗口 → OCR 读空、点击落空、用户被骚扰。
 - **WorkBuddy 工具层限制**（逻辑：AI 工具对「从工具 A 拉起解释器 B」有安全拦截；沙箱关闭后可能已消失）：
-  - PowerShell 工具里 `powershell` 不在 PATH（CommandNotFoundException）→ 用绝对路径 `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`；
+  - PowerShell 工具里 `powershell` 不在 PATH（CommandNotFoundException）→ 用绝对路径 `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`；**2026-10-28 根治关闭：①用户 PATH 注册表已补该目录（新进程生效）；②包内 11 脚本 28 处裸 `& powershell` 子进程全部改为绝对路径字面量（fix-powershell-path-2026-10-28.ps1 批改，BOM/Parser 全过）——包内脚本从此不依赖 PATH，但 AI 工具会话内手动调用仍需绝对路径（宿主进程环境变量需重启才刷新）；**
   - Bash 工具里调 powershell 被拦（bypasses PowerShell security checks）→ 改用 PowerShell 工具；
   - PowerShell 工具里 `cmd /c` 被拦 → 用原生 PowerShell 语法；
   - `Start-Process` 指向系统解释器（LOLBin）被拦 → 只能用 `& powershell.exe -File ...` 调用形式。

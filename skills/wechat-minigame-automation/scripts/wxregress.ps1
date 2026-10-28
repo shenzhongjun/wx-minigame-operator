@@ -21,14 +21,14 @@ foreach ($r in $rows) {
     $img = Join-Path $ImgDir $r.file
     if (-not (Test-Path $img)) { "[SKIP] $($r.file) 图片不存在"; $skip++; continue }
     if ($r.btn -ne "") {
-        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $autostate -Img $img 2>&1
+        $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $autostate -Img $img 2>&1
         $got = ""
         foreach ($line in $out) { if ($line -match '^BTN_STATE=(\w+)') { $got = $Matches[1] } }
         if ($got -eq $r.btn) { "[PASS] btn $($r.file) = $got"; $pass++ }
         else { "[FAIL] btn $($r.file) 期望=$($r.btn) 实际=$got ($out)"; $fail++ }
     }
     if ($r.state -ne "") {
-        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $probe -Img $img 2>&1
+        $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $probe -Img $img 2>&1
         $got = ""
         foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { $got = $Matches[1] } }
         if ($got -eq $r.state) { "[PASS] state $($r.file) = $got"; $pass++ }

@@ -18,10 +18,10 @@ $card = @{ 1 = "138:342"; 2 = "421:342"; 3 = "704:340"; 4 = "987:340"; 5 = "138:
 $targetScreen = if ($Char -le 4) { 1 } else { 2 }
 
 function Invoke-Click([string]$steps) {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
+    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
 function Test-OcrTask([string]$task) {
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task $task 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task $task 2>&1
     $joined = ($out | ForEach-Object { "$_" }) -join ' '
     return ($joined -match "OCR=$task=HIT")
 }
@@ -51,7 +51,7 @@ function Switch-Screen([int]$need) {
 }
 
 # ---- 起始态守卫 ----
-$probe = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
+$probe = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
 $st = "ERR"
 foreach ($line in $probe) { if ("$line" -match '^STATE=(\w+)') { $st = $Matches[1]; break } }
 "start state=$st"

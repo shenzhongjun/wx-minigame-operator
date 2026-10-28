@@ -55,7 +55,7 @@ if ($goldBtn -ge 400) {
         $tmpPng = Join-Path $env:TEMP ("wrx_popup_" + [guid]::NewGuid().ToString('N') + ".png")
         $bmp.Save($tmpPng, [System.Drawing.Imaging.ImageFormat]::Png)
     }
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Img $tmpPng -X0 $BX0 -Y0 $BY0 -X1 $BX1 -Y1 $BY1 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Img $tmpPng -X0 $BX0 -Y0 $BY0 -X1 $BX1 -Y1 $BY1 2>&1
     $joined = ($out | ForEach-Object { "$_" }) -join ' '
     if ($joined -match 'OCR_RAW=\[(.*)\]') { $raw = $Matches[1] }
     if ($Img -eq "" -and (Test-Path $tmpPng)) { Remove-Item $tmpPng -Force }

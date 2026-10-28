@@ -2,12 +2,14 @@
 # wxnav-tower.ps1 - 毁灭之塔练习模式导航链（2026-10-25 体系重打磨新增）
 # 前提：当前在主城（或用 -SkipStart 跳过 冒险/副本 两段——已在副本页时使用）
 # 链路：冒险(936,664) → 副本(843,563) → 毁灭之塔卡(880,212) → 练习模式(444,163) → 出战(957,633)
-# 每段后内嵌像素断言（阈值来自 wx-verify 标注截图实测），断言失败=截图留证+exit 非零，绝不盲点：
+# 每段后内嵌像素断言（阈值来自 wx-verify 标注截图实测，基准=S=1 设计窗），断言失败=截图留证+exit 非零，绝不盲点：
 #   A 副本页：日常副本 tab 金色 ≥150（实测 261；选角页杂金 41）
-#   B 塔页：结算带红色 ≥10（塔页红月实测 16-22；副本页 0）
+#   B 塔页：结算带红色 ≥100（代码定版基准；头注旧「≥10」为过时残留已删）
 #   C 练习已选：练习说明框白色大字块 ≥400（区域 (395,195)-(625,268)，阈值220实测正样本990、
 #     正常模式无说明框≈0；标定件 冒烟测试\calib-practice-white-2026-10-27.ps1。旧「tab下划线
 #     金≥50」判据作废——细金线在 S≈1.035 缩放下亚像素化，实测金=2 误报失败，2026-10-27 用户裁定）
+# 2026-10-28：A/B/C 阈值统一 × S²（实时几何重算）——像素计数随画面等比缩放按面积衰减，
+#   固定阈值在 860 小窗误报（probe 重裁交接待办定版修法）；S 由 Test-WxMinClientW 守卫（宽<800 停）。
 # 出战后自动战斗由调用方 wxclick auto / wxgrind 负责
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 
@@ -51,7 +53,7 @@ function Get-LiveCount([int]$x0, [int]$y0, [int]$x1, [int]$y1, [string]$mode) {
 }
 function Stop-NavFail([string]$step, [string]$detail) {
     "NAV_FAIL: $step ($detail)"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxshot.ps1" -Out $shot -Pid2 $Pid2 | Select-Object -Last 1
+    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\wxshot.ps1" -Out $shot -Pid2 $Pid2 | Select-Object -Last 1
     "fail screenshot=$shot"
     exit 9
 }
@@ -61,21 +63,27 @@ if (-not $SkipStart) {
     Invoke-NavClick 936 664 1800   # 冒险
     Invoke-NavClick 843 563 2200   # 副本
 }
+$gA = Get-ClientGeometry $hwnd; $s2A = $gA.S * $gA.S
+$aNeed = [math]::Ceiling(150 * $s2A)
 $a = Get-LiveCount 30 140 160 205 'gold'
-"checkA dungeon-tab gold=$a (need >=150)"
-if ($a -lt 150) { Stop-NavFail 'A 副本页' "gold=$a" }
+"checkA dungeon-tab gold=$a (need >=$aNeed @S2=$([math]::Round($s2A,3)))"
+if ($a -lt $aNeed) { Stop-NavFail 'A 副本页' "gold=$a need=$aNeed" }
 
 # --- B段：进塔 ---
 Invoke-NavClick 880 212 2200   # 毁灭之塔卡
+$gB = Get-ClientGeometry $hwnd; $s2B = $gB.S * $gB.S
+$bNeed = [math]::Ceiling(100 * $s2B)
 $b = Get-LiveCount 890 225 940 445 'red'
-"checkB tower-page red=$b (need >=100)"
-if ($b -lt 100) { Stop-NavFail 'B 塔页' "red=$b" }
+"checkB tower-page red=$b (need >=$bNeed @S2=$([math]::Round($s2B,3)))"
+if ($b -lt $bNeed) { Stop-NavFail 'B 塔页' "red=$b need=$bNeed" }
 
 # --- C段：切练习模式 ---
 Invoke-NavClick 444 163 1800   # 练习模式 tab
+$gC = Get-ClientGeometry $hwnd; $s2C = $gC.S * $gC.S
+$cNeed = [math]::Ceiling(400 * $s2C)
 $c = Get-LiveCount 395 195 625 268 'white'
-"checkC practice-tip white=$c (need >=400)"
-if ($c -lt 400) { Stop-NavFail 'C 练习模式' "white=$c" }
+"checkC practice-tip white=$c (need >=$cNeed @S2=$([math]::Round($s2C,3)))"
+if ($c -lt $cNeed) { Stop-NavFail 'C 练习模式' "white=$c need=$cNeed" }
 
 # --- 出战 ---
 Invoke-NavClick 957 633 4000

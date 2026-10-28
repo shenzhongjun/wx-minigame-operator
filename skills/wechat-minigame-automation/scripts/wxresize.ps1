@@ -4,7 +4,8 @@
 #       也可指定其它同比例尺寸（例如 1252x779）做缩放验证。
 # 原理：定位窗口 → 最小化/最大化先还原 → 实测 chrome 差值 → SetWindowPos → 回读校验
 # 参数：-Pid2 0=按标题自动发现；-ClientW/-ClientH 缺省用设计基准值
-# 注意：目标尺寸必须与设计基准同长宽比（±1.2%），否则坐标换算不成立
+# 注意：目标尺寸必须与设计基准同长宽比（±2.5%；2026-10-28 由 ±1.2% 放宽——v1.1.11 画布垂直居中
+#       已支持中等非等比窗，常用 1178×744/1173×741 实测差 ~1.6% 被旧阈值误拒）
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 
 $hwnd = Find-GameWindow -Pid2 $Pid2
@@ -14,7 +15,7 @@ $geo = Get-ClientGeometry $hwnd -NoAssert
 
 $tw = if ($ClientW -gt 0) { $ClientW } else { $WX_CLIENT_W }
 $th = if ($ClientH -gt 0) { $ClientH } else { $WX_CLIENT_H }
-if ([math]::Abs(($tw / $WX_DESIGN_W) - ($th / $WX_DESIGN_H)) -gt 0.012) {
+if ([math]::Abs(($tw / $WX_DESIGN_W) - ($th / $WX_DESIGN_H)) -gt 0.025) {
     "ERR: 目标尺寸 ${tw}x${th} 与设计基准 $($WX_DESIGN_W)x$($WX_DESIGN_H) 长宽比不符，坐标换算不成立。退出"
     exit 3
 }

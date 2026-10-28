@@ -49,7 +49,7 @@ foreach ($f in ($required | Where-Object { $_ -like '*.md' })) {
 
 Write-Host ''
 Write-Host '--- live 几何审计（窗口已开时；wxcanvas 实测 chrome vs 常量）---'
-$canvasOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $base 'scripts\wxcanvas.ps1') 2>&1
+$canvasOut = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File (Join-Path $base 'scripts\wxcanvas.ps1') 2>&1
 $canvasJoined = ($canvasOut | ForEach-Object { "$_" }) -join "`n"
 if ($canvasJoined -match 'window not found') {
   Write-Host '[SKIP] 游戏窗口未开，跳过 chrome 审计（开局开窗后请补跑 wxcanvas.ps1）'

@@ -5,7 +5,7 @@ $probe = Join-Path $PSScriptRoot "wxprobe.ps1"
 $deadline = (Get-Date).AddSeconds($MaxSec)
 $state = ""
 while ($true) {
-  $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $probe -Pid2 $Pid2 2>&1
+  $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $probe -Pid2 $Pid2 2>&1
   $line = ($out | Where-Object { $_ -match "^STATE=" } | Select-Object -First 1)
   if ($line) { $state = "$line" } else { $state = "STATE=ERR($out)" }
   if ($state -match "^STATE=$Want(,|$)") { "$state (waited)"; exit 0 }

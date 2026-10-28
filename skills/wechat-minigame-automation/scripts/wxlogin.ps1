@@ -14,18 +14,18 @@
 #       -AssumeGold 保留为人工强制放行开关（跳过分类直接点）。
 $scripts = $PSScriptRoot
 function Get-State {
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
     foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { return $Matches[1] } }
     return "ERR"
 }
 function Invoke-Click([string]$steps) {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
+    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
 function Test-CharSel {
     # OCR 验证选角页（转场/加载容忍：15s 轮询）
     $deadline = (Get-Date).AddSeconds(15)
     while ((Get-Date) -lt $deadline) {
-        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task charsel 2>&1
+        $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task charsel 2>&1
         $joined = ($out | ForEach-Object { "$_" }) -join ' '
         if ($joined -match 'OCR=charsel=HIT') { return $true }
         if ($joined -match 'ERR:') { return $false }
@@ -35,20 +35,20 @@ function Test-CharSel {
 }
 function Test-TownOcr {
     # 主城身份权威判定（2026-10-27：wxprobe TOWN_PAGE 退役，OCR 为准）
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task town 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task town 2>&1
     $joined = ($out | ForEach-Object { "$_" }) -join ' '
     return ($joined -match 'OCR=town=HIT')
 }
 function Test-LoginOcr {
     # 登录页身份权威判定（2026-10-27 用户定版：探针退役，OCR 为准，唯一判据=server 任务）
     # 「进入游戏」为风格化美术字 OCR 读不动，用户裁定不设任务
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1
     $joined = ($out | ForEach-Object { "$_" }) -join ' '
     return ($joined -match 'OCR=server=HIT')
 }
 function Get-PopupClass {
     # v1.1.6：GOLD_DIALOG 弹窗 OCR 分类（wxpopup v2），挂机类自动放行的判据源
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
     foreach ($line in $out) { if ("$line" -match 'POPUP=(POPUP_\w+)') { return $Matches[1] } }
     return "POPUP_UNKNOWN"
 }
