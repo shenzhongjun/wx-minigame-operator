@@ -43,6 +43,29 @@ if ($unrouted.Count -gt 0) {
   Write-Host "[OK  ] 路由完整性：references $($refFiles.Count) 个文件全部在 SKILL.md 有入口"
 }
 
+# --- 2.5 坐标泄漏检测（2026-10-28 用户定版，管理新规 一之二；WARN 不阻断，观察期后升格 FAIL） ---
+# 唯一坐标入口=coords.md；非坐标文档（SKILL.md/game-mechanics/features）出现 (x,y) 坐标模式即告警。
+# 豁免行：删除线(~~)、含「作废/已删/旧坐标/旧值/历史」警示行、含 coords.md 指针语义行（见 coords/坐标见）。
+$leakFiles = @(Join-Path $base 'SKILL.md') + @(Get-ChildItem (Join-Path $base 'references') -Recurse -File -Filter '*.md' | Where-Object { $_.Name -in @('game-mechanics.md') -or $_.DirectoryName -like '*features' } | ForEach-Object { $_.FullName })
+$leakCount = 0
+foreach ($lf in $leakFiles) {
+  $ln = 0
+  foreach ($line in (Get-Content -LiteralPath $lf -Encoding UTF8)) {
+    $ln++
+    if ($line -match '\(\d{1,4}\s*,\s*\d{1,4}\)') {
+      if ($line -match '~~|作废|已删|旧坐标|旧值|历史|coords\.md|坐标见') { continue }
+      $rel = Resolve-Path -LiteralPath $lf -Relative
+      Write-Host "[WARN] 疑似坐标泄漏：$rel :${ln} → $((($line).Trim().Substring(0, [Math]::Min(60, $line.Trim().Length))))" -ForegroundColor Yellow
+      $leakCount++
+    }
+  }
+}
+if ($leakCount -eq 0) {
+  Write-Host '[OK  ] 坐标泄漏检测：非坐标文档 0 命中（唯一入口=coords.md）'
+} else {
+  Write-Host "[WARN] 坐标泄漏检测：$leakCount 行疑似坐标出现在非坐标文档（唯一入口=coords.md，改指针或补豁免标注）" -ForegroundColor Yellow
+}
+
 # --- 3. 摘要 ---
 Write-Host ''
 Write-Host '--- references 清单 ---'
