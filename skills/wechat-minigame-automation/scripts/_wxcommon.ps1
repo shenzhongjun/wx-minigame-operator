@@ -11,9 +11,9 @@ $WX_DESIGN_H = 708
 $WX_CLIENT_W = $WX_DESIGN_W         # 兼容旧名，含义等同设计基准
 $WX_CLIENT_H = $WX_DESIGN_H
 $WX_WINDOW_TITLE = '勇士之心'        # 窗口标题匹配针
-$WX_BTN_X0 = 195; $WX_BTN_Y0 = 175  # 自动战斗按钮文字区（wxwhitebox 实测，设计坐标）
-$WX_BTN_X1 = 253; $WX_BTN_Y1 = 187
-$WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # 按钮点击点（设计坐标）
+$WX_BTN_X0 = 195; $WX_BTN_Y0 = 175  # 自动战斗按钮文字区（⚠️ 旧布局常量，仅模板诊断用——v1.1.10 起实际
+$WX_BTN_X1 = 253; $WX_BTN_Y1 = 187  #    文字带=y164-184 已漂移；开启判据=wxocr autobtn (175,158)-(275,195)）
+$WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # ⚠️ 已作废（v1.1.10 锚点=(215,172)）；仅存留勿用
 # 微信小游戏内嵌标题栏（客户区顶部白条「勇士之心」+胶囊按钮）：固定高度，不随窗口缩放。
 # 2026-10-26 wxcanvas.ps1 实测两尺寸（650x431 / 1967x1192）chrome 均=55px 坐实。
 # 设计基准 1138x708 的 0-54 行即此标题栏；游戏画布=设计 55-707 行（653px 高，等比缩放）。

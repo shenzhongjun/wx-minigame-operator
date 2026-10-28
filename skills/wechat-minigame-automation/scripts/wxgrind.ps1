@@ -102,6 +102,9 @@ function Invoke-PopupGuard {
     # 依据：wxpoke 实测无法重置游戏挂机计时（2026-10-26 圣殿挂机弹窗 115s 戳间隔下仍复现）。
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
     $joined = ($out -join " ")
+    # 2026-10-28（事件20 移植）：wxpopup 判 NONE=画面无真弹窗（probe 被金边装饰提示框欺骗的假 GOLD）
+    #   → 返回 "NONE"，调用方继续等待/重探，不停机不点击。
+    if ($joined -match 'POPUP_NONE') { Write-Host "GUARD: wxpopup NONE (probe false gold, event20) -> continue"; return "NONE" }
     if ($joined -match 'POPUP_IDLE') {
         Write-Host "GUARD: POPUP_IDLE -> dismiss (700,513) then verify page"
         Invoke-Click "700:513:600" | Out-Null
@@ -130,6 +133,9 @@ for ($i = 1; $i -le $Rounds; $i++) {
                     $goldStreak = 0; $t += 3
                     # 不 continue：落回循环底部重探（dismiss 后画面已变，$st 需刷新）
                 } elseif ($g -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
+                elseif ($g -eq "NONE") { $goldStreak = 0; $t += 1
+                    # 事件20：probe 假金（装饰提示框），wxpopup 证实无真弹窗 → 继续等，不停机
+                }
                 else { "STOP: persistent gold dialog (death/idle/login)"; exit 6 }
             }
             Start-Sleep -Seconds 1; $t += 1
@@ -174,18 +180,19 @@ for ($i = 1; $i -le $Rounds; $i++) {
         # IDLE → 自动 dismiss 后重探续跑；LOGIN=被踢 → exit 7；顶号/扩展券/未知 → 红线停机。
         $g = Invoke-PopupGuard
         if ($g -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
-        if ($g -ne "OK") { "STOP: gold dialog after enter"; exit 6 }
+        if ($g -ne "OK" -and $g -ne "NONE") { "STOP: gold dialog after enter"; exit 6 }
         $st = Invoke-ProbeHeal
         "round ${i}: after guard state=$st"
         if ($st -eq "ERR") { "STOP: probe error after enter"; exit 9 }
     }
     if ($st -eq "STAMINA_POP") { "STOP: stamina popup after enter"; exit 5 }
-    if ($st -eq "AUTO_OFF") {
-        $out = Invoke-Click "auto"
-        $out | ForEach-Object { "$_" }
-        $joined = ($out -join "`n")
-        if ($joined -match 'AUTO_ENSURE_FAIL') { "STOP: auto ensure failed"; exit 3 }
-    }
+    # 3.5) 自动战斗确保（v1.1.12 起唯一入口=wxautoensure，OCR 单判据；旧模板 gated 路径退役——
+    #      其布局常量/锚点已被 v1.1.10/11 两次变更甩下，wxprobe AUTO 态仅存诊断用途）。
+    #      无条件每场必调：ON 优先判定（已开 ~1s 返回 0 点击），不再依赖 probe AUTO_OFF 触发。
+    "round ${i}: ensure auto (wxautoensure)"
+    $ens = & powershell -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxautoensure.ps1" -Pid2 $Pid2 -TimeoutSec 30 2>&1
+    $ens | ForEach-Object { "$_" }
+    if (($ens -join "`n") -notmatch 'AUTO_ENSURED') { "STOP: auto ensure failed"; exit 3 }
     # 4) 等战斗结束（下一轮的等结算负责等待）
 }
 "LOOP: $Rounds rounds completed"

@@ -4,6 +4,32 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.1 --stat`（两版间文件差异）。
 
+## [1.1.12] - 2026-10-28
+
+**主题：自动战斗开启全链单源化到 wxautoensure（旧模板路径退役）+ wxgrind 移植事件20 假金自愈**
+
+### 排查结论（用户问「自动战斗是否全权由 auto 脚本控制」引出）
+- **修前不是**：wxgrind 中途补开（probe AUTO_OFF→wxclick auto）与 wxclick `auto`/`autonow` 步骤仍走旧模板 gated 路径，其布局常量 (195,175)-(253,187)/锚点 (224,181) 已被 v1.1.10/11 两次变更甩下（现行文字带 y164-184、锚点 (215,172)），叠加画布垂直居中根治的内容位移——**旧路径实际已失灵，wxgrind 的中途补开保险丝是断的**。
+- **修后是**：自动战斗开启全链唯一入口=`wxautoensure.ps1`（OCR autobtn 单判据）；模板资产/wxautostate/wxprobe AUTO 态降级为仅诊断。
+
+### wxgrind.ps1
+- 入场后 AUTO_OFF 条件分支 → **无条件每场必调 wxautoensure**（ON 优先：已开 ~1s 返回 0 点击；不再依赖 probe 模板态触发）；FAIL exit 3 语义不变。
+- `Invoke-PopupGuard` 移植**事件20 自愈**：wxpopup 判 `POPUP_NONE`（probe 被金边装饰提示框欺骗的假 GOLD_DIALOG）→ 返回 NONE，调用方继续等待，不停机不点击——修前 wxgrind 遇假金直接停机 exit 6（冒烟驱动早已修过，wxgrind 漏移植）。
+
+### wxclick.ps1
+- `auto`/`autonow` 步骤 → 内部委托 wxautoensure（Steps 语法兼容；FAIL 整体 exit 3 与旧语义一致，输出 AUTO_ENSURED/AUTO_ENSURE_FAIL 字样兼容 wxgrind 检测）；旧模板 Ensure-Auto 循环删除。
+- _wxcommon `$WX_BTN_*` 常量与 (224,181) 锚点标注「已漂移/作废，仅存留勿用」；wxprobe 头注释同步。
+
+### 验证（1138×708 精确基准窗，塔练习实战）
+- wxclick auto 委托：出战后调用 **AUTO_ENSURED 1.9s/1click，exit 0**。
+- wxgrind -Rounds 1 -AutoRetry：假金自愈 20+ 次全部正确续跑 → 再来一次 → 入场 → ensure OFF→3连点→ON（前两击落加载尾窗，第3击生效，点击上限 3 恰好够用）→ 1 轮完成 exit 0。
+- 4 文件 Parser 0 错误 + BOM ✓。
+
+### 已知挂账（本版未处理）
+- wxnav-tower A/B/C 像素计数阈值为大窗定标，小窗（S≈0.73）未按 S² 缩放，860 宽下 A 断言会误报（另有弹窗因素叠加）。
+- wxresize 整窗长宽比断言 ±1.2% 会拒绝非等比常用窗（1173×741/1178×744 均差 ~1.5%）；几何模型本身支持任意比例，断言偏严，放宽与否待用户裁决。
+
+
 ## [1.1.11] - 2026-10-28
 
 **主题：几何根治——画布垂直居中建模（CANVASTOP）+ town/server 判据区域修正 + 运行环境坑档案**
