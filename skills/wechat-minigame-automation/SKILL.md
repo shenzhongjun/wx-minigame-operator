@@ -18,6 +18,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `管理新规.md` | 治理规则（文件分工/增长管理/三态路由），优先级最高 |
 | `references/tasks.md` | 角色-副本任务档案与每日任务分配 |
 | `references/coords.md` | 纯坐标与标定（坐标表/缩放/像素判定/探针校准） |
+| `references/ui-map.md` | 界面按钮语义/判据/红线地图（普查产出；坐标一律见 coords.md） |
 | `references/features/dungeon-runs.md` | 副本刷取流程（冥渊/圣殿/航路） |
 | `references/features/daily-claim.md` | 每日领体力流程 |
 | `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/免费首把；每日标准循环看 tasks.md；角色分工看 tasks.md） |
