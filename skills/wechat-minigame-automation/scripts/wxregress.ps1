@@ -1,4 +1,4 @@
-﻿param([string]$Manifest = "", [string]$ImgDir = "C:\Users\zhouyijie\WorkBuddy\游戏\wx-verify")
+﻿param([string]$Manifest = "", [string]$ImgDir = "$env:TEMP\wx-verify")
 # wxregress.ps1 - 离线回归测试（体系重打磨 P2，2026-10-25）
 # ⚠️ 2026-10-26 用户裁定：清单 _regress-manifest.csv 系 AI 标注未经人工核验（含命名/断言矛盾行、UNKNOWN 误报锁定行），
 #    本回归体系【暂停使用】；恢复前脚本改动验证以实机探针+截图目验替代，本脚本输出不作为改动门槛。

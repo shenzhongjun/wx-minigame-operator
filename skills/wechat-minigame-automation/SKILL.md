@@ -25,7 +25,8 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/run-environment-pitfalls.md` | **运行环境坑全集**（执行方式/编码语法/输出捕获/桌面窗口/成本纪律；拉子进程必带 `-WindowStyle Hidden`） |
 | `scripts/` `assets/` | 全部自动化脚本；自动战斗模板图 |
 | 专家包 `wx-minigame-operator` | 角色纪律：开局协议/致命五坑/熔断/红线/收尾 |
-| 包外**开发交接文档**（游戏工作区） | 开发待办/踩坑流水/废弃方案记录（2026-10-29 用户定版：todo-scripts/update-log 取消，开发与使用分离） |
+
+> 本包独立封闭：包内文档、代码不引用包外任何文件或路径；开发/标定类事务不属操作员职责，发现即上报用户裁决。
 
 ## 执行规则
 
@@ -92,7 +93,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocr autobtn 任务 OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
 | `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
-| `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对 wx-verify 标注截图断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
+| `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对标注截图库（`-ImgDir` 传入）断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
 | `wxpopup.ps1` | **弹窗分类器 v2（OCR 化）**：金确定钮守卫+正文带 OCR（区域见 coords.md「弹窗」行）关键字分类——挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/羽毛复活(可点确定)/无/未知(红线停)；v1 像素模板退役（正文位置浮动即全灭，2026-10-27 实战） | `-Pid2 -Img` |
@@ -165,7 +166,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 1. 查 `coords.md`：有记录直接照跑；没有 → 截图定位入口，wxclick 连招进图，探针确认状态，坐标流程写入档案。
 2. 用户原话的任务分配先写入 `tasks.md` 再执行。
-3. 任务结束回报场次/体力/邀请函/金币，同步档案；踩坑随包外**开发交接文档**记录（update-log 已取消，2026-10-29 用户定版）。
+3. 任务结束回报场次/体力/邀请函/金币；踩坑按性质入 `incidents.md`（事故类）或 `run-environment-pitfalls.md`（环境类）归档。
 
 ## 13. 维护与流水（详见 `管理新规.md`）
 

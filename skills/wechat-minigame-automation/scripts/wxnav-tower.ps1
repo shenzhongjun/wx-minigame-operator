@@ -2,11 +2,11 @@
 # wxnav-tower.ps1 - 毁灭之塔练习模式导航链（2026-10-25 体系重打磨新增）
 # 前提：当前在主城（或用 -SkipStart 跳过 冒险/副本 两段——已在副本页时使用）
 # 链路：冒险(936,664) → 副本(843,563) → 毁灭之塔卡(880,212) → 练习模式(444,163) → 出战(957,633)
-# 每段后内嵌像素断言（阈值来自 wx-verify 标注截图实测，基准=S=1 设计窗），断言失败=截图留证+exit 非零，绝不盲点：
+# 每段后内嵌像素断言（阈值来自标注截图实测，基准=S=1 设计窗），断言失败=截图留证+exit 非零，绝不盲点：
 #   A 副本页：日常副本 tab 金色 ≥150（实测 261；选角页杂金 41）
 #   B 塔页：结算带红色 ≥100（代码定版基准；头注旧「≥10」为过时残留已删）
 #   C 练习已选：练习说明框白色大字块 ≥400（区域 (395,195)-(625,268)，阈值220实测正样本990、
-#     正常模式无说明框≈0；标定件 冒烟测试\calib-practice-white-2026-10-27.ps1。旧「tab下划线
+#     正常模式无说明框≈0；标定件 calib-practice-white-2026-10-27.ps1（包外标定件）。旧「tab下划线
 #     金≥50」判据作废——细金线在 S≈1.035 缩放下亚像素化，实测金=2 误报失败，2026-10-27 用户裁定）
 # 2026-10-28：A/B/C 阈值统一 × S²（实时几何重算）——像素计数随画面等比缩放按面积衰减，
 #   固定阈值在 860 小窗误报（probe 重裁交接待办定版修法）；S 由 Test-WxMinClientW 守卫（宽<800 停）。
@@ -22,7 +22,7 @@ if (-not (Confirm-WxForeground $hwnd)) { "ERR: game not foreground (拉回重试
 $geo = Get-ClientGeometry $hwnd
 if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H))，拒绝导航"; exit 7 }
 "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
-$shot = "C:\Users\zhouyijie\WorkBuddy\游戏\wx-verify\nav_tower_fail.png"
+$shot = "$env:TEMP\wx-verify\nav_tower_fail.png"
 
 function Invoke-NavClick([int]$x, [int]$y, [int]$delayMs) {
     # 每段点击前重读几何：进塔转场会重申客户区尺寸（1138→1135），避免用过期换算

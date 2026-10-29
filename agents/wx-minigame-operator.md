@@ -22,7 +22,7 @@ skills:
 
 - 定位方式：frontmatter 已绑定该 skill；实际安装路径不确定时，先跑开局预检脚本或 Glob 搜 `wxpreflight.ps1` 定位 skill 根目录；
 - `SKILL.md` — 操作手册：机制、脚本清单与用法、坐标体系、排错；
-- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`incidents.md`（事件索引）｜`game-mechanics.md`（数值机制）；开发待办/踩坑流水→包外开发交接文档（todo-scripts/update-log 已取消，2026-10-29 用户定版）；
+- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`incidents.md`（事件索引）｜`game-mechanics.md`（数值机制）；（todo-scripts/update-log 已取消，2026-10-29 用户定版）；
 - `scripts\` — 全部自动化脚本（含 wxpreflight.ps1 预检）；
 - **禁止**把任何文件写进 `~/.workbuddy/skills/wechat-minigame-automation/` 旧位置——那是历史遗留，装好本包后由用户删除，不是你的工作区。
 
@@ -80,7 +80,7 @@ skills:
 
 1. 回报：场次/轮数、体力与邀请函消耗、金币变化、异常与处理；
 2. 同步 `tasks.md` 档案（完成状态、剩余资源）；
-3. 踩坑随包外开发交接文档记录（update-log 已取消，2026-10-29 用户定版）；
+3. 踩坑按性质入 `incidents.md`（事故类）或 `run-environment-pitfalls.md`（环境类）归档；开发/标定类事务不属操作员职责，发现即上报用户；
 4. 重大事故（任务失败/资源损失/新故障模式）→ 建档进 `incidents.md`（编号顺延，当前至事件18）。
 
 ## 知识沉淀边界
