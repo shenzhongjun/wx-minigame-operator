@@ -22,7 +22,7 @@ skills:
 
 - 定位方式：frontmatter 已绑定该 skill；实际安装路径不确定时，先跑开局预检脚本或 Glob 搜 `wxpreflight.ps1` 定位 skill 根目录；
 - `SKILL.md` — 操作手册：机制、脚本清单与用法、坐标体系、排错；
-- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`incidents.md`（事件档案）｜`game-mechanics.md`（数值机制）｜`update-log.md`（踩坑流水）｜`todo-scripts.md`（待办）；
+- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`incidents.md`（事件索引）｜`game-mechanics.md`（数值机制）；开发待办/踩坑流水→包外开发交接文档（todo-scripts/update-log 已取消，2026-10-29 用户定版）；
 - `scripts\` — 全部自动化脚本（含 wxpreflight.ps1 预检）；
 - **禁止**把任何文件写进 `~/.workbuddy/skills/wechat-minigame-automation/` 旧位置——那是历史遗留，装好本包后由用户删除，不是你的工作区。
 
@@ -33,7 +33,7 @@ skills:
 任务开始后、执行任何点击/截图/脚本之前，必须完成并输出《开局自检报告》：
 
 1. 跑 `scripts\wxpreflight.ps1`（校验档案齐全 + 打印各文件要点摘要）；
-2. 逐个读 `references\tasks.md`、`coords.md`、`incidents.md`、`game-mechanics.md`、`todo-scripts.md`，并 Glob 浏览 `scripts/` 清单；
+2. 逐个读 `references\tasks.md`、`coords.md`、`incidents.md`、`game-mechanics.md`，并 Glob 浏览 `scripts/` 清单；
 3. 报告格式：每个文件一行 `已读｜与本任务相关的 1~2 条要点`；本任务副本档案零记录 → 先按手册 §12 标定，再执行。
 
 **自检报告未输出前，任何画面交互动作均视为违规。加载本文件 ≠ 已读手册（事件18）。**
@@ -80,11 +80,11 @@ skills:
 
 1. 回报：场次/轮数、体力与邀请函消耗、金币变化、异常与处理；
 2. 同步 `tasks.md` 档案（完成状态、剩余资源）；
-3. 踩坑按 `update-log.md` 路由规则记录（已提升/已修复/待观察）；
+3. 踩坑随包外开发交接文档记录（update-log 已取消，2026-10-29 用户定版）；
 4. 重大事故（任务失败/资源损失/新故障模式）→ 建档进 `incidents.md`（编号顺延，当前至事件18）。
 
 ## 知识沉淀边界
 
-- 新知识落笔前三问（见手册 §13）：会过时 → game-mechanics/update-log/incidents；只跟某台电脑/副本有关 → coords-*.md；持久教训 → 手册排错表 + incidents 细节；
+- 新知识落笔前三问（见手册 §13）：会过时 → game-mechanics/incidents；只跟某台电脑/副本有关 → coords-*.md；持久教训 → 手册排错表 + incidents 细节；
 - **本文件只管角色纪律**（红线/熔断/开局协议/冒烟制）；修改本文件任何条款必须先征得用户确认；
 - 手册 SKILL.md 上限 200 行、只增必减等约束照手册 §13 执行。

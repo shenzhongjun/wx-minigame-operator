@@ -21,12 +21,11 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/features/dungeon-runs.md` | 副本刷取流程（冥渊/圣殿/航路） |
 | `references/features/daily-claim.md` | 每日领体力流程 |
 | `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/每日循环；角色分工看 tasks.md） |
-| `references/update-log.md` | 踩坑/优化流水缓冲区 |
-| `references/incidents.md` | 事件根因档案（事件1-19） |
-| `references/todo-scripts.md` | 待办清单（自主探索待办/悬案/废弃标记） |
+| `references/incidents.md` | 事件根因档案（索引版，事件1-22） |
 | `references/run-environment-pitfalls.md` | **运行环境坑全集**（执行方式/编码语法/输出捕获/桌面窗口/成本纪律；拉子进程必带 `-WindowStyle Hidden`） |
 | `scripts/` `assets/` | 全部自动化脚本；自动战斗模板图 |
 | 专家包 `wx-minigame-operator` | 角色纪律：开局协议/致命五坑/熔断/红线/收尾 |
+| 包外**开发交接文档**（游戏工作区） | 开发待办/踩坑流水/废弃方案记录（2026-10-29 用户定版：todo-scripts/update-log 取消，开发与使用分离） |
 
 ## 执行规则
 
@@ -166,9 +165,9 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 1. 查 `coords.md`：有记录直接照跑；没有 → 截图定位入口，wxclick 连招进图，探针确认状态，坐标流程写入档案。
 2. 用户原话的任务分配先写入 `tasks.md` 再执行。
-3. 任务结束回报场次/体力/邀请函/金币，同步档案；踩坑按 `update-log.md` 路由。
+3. 任务结束回报场次/体力/邀请函/金币，同步档案；踩坑随包外**开发交接文档**记录（update-log 已取消，2026-10-29 用户定版）。
 
 ## 13. 维护与流水（详见 `管理新规.md`）
 
-- 新知识落笔前三问（会过时→稳定层；单机/副本→coords；持久教训→本文件排错表+incidents）；本文件上限 200 行、180 行警戒，**增长只走 references 辐条（新功能→features/<名>.md），本文件只以表格加行吸收**，禁新旧并存；update-log 按 已提升/已修复/待观察 路由；文件增删同步 管理新规 §一表；维护后跑 wxdoclint 校验。
+- 新知识落笔前三问（会过时→稳定层；单机/副本→coords；持久教训→本文件排错表+incidents）；本文件上限 200 行、180 行警戒，**增长只走 references 辐条（新功能→features/<名>.md），本文件只以表格加行吸收**，禁新旧并存；文件增删同步 管理新规 §一表；维护后跑 wxdoclint 校验。
 - 角色纪律（红线/熔断/开局协议/冒烟制）属于专家包 `wx-minigame-operator`，本文件禁止收纳；手册与专家条款冲突时停下问用户。

@@ -13,8 +13,7 @@ $required = @(
   'references\coords.md',
   'references\incidents.md',
   'references\game-mechanics.md',
-  'references\todo-scripts.md',
-  'references\update-log.md',
+  'references\run-environment-pitfalls.md'
   'assets\btn_auto_off.png',
   'assets\btn_auto_on.png'
 )
