@@ -20,7 +20,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/coords.md` | 纯坐标与标定（坐标表/缩放/像素判定/探针校准） |
 | `references/features/dungeon-runs.md` | 副本刷取流程（冥渊/圣殿/航路） |
 | `references/features/daily-claim.md` | 每日领体力流程 |
-| `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/每日循环；角色分工看 tasks.md） |
+| `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/免费首把；每日标准循环看 tasks.md；角色分工看 tasks.md） |
 | `references/incidents.md` | 事件根因档案（索引版，事件1-22） |
 | `references/run-environment-pitfalls.md` | **运行环境坑全集**（执行方式/编码语法/输出捕获/桌面窗口/成本纪律；拉子进程必带 `-WindowStyle Hidden`） |
 | `scripts/` `assets/` | 全部自动化脚本；自动战斗模板图 |
@@ -131,7 +131,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | 弹「冥渊邀请函 数量:0」 | 停 |
 | 连点两次「再来一次」不进图 | 停，不要反复硬试 |
 
-**资源机制（体力/邀请函/钻石/免费首把/每日标准循环）→ `references/game-mechanics.md`，本文件不重复。**
+**每日标准循环（唯一全文）→ `references/tasks.md`；资源机制（体力/邀请函/钻石/免费首把）→ `references/game-mechanics.md`，本文件不重复。**
 
 ## 10. 顶号弹窗处置（红线摘要，全文见专家包协作红线）
 
