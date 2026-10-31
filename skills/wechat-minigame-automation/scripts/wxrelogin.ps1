@@ -10,7 +10,11 @@
 #       礼包判据 2026-10-31 起来自 wxpopup POPUP_PACK，probe 不再判弹窗）。
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxrelogin.ps1 [-Pid2 N] [-Char 1] [-TownTimeoutSec 90] [-AssumeGold] [-Perf]
 # 退出码：0=RELOGIN_OK（三探针确认到主城）｜ALREADY_TOWN（本来就在主城，未执行任何点击）；9=STOP（红线/超时/异常，人工核对）。
-# -Perf：输出分段计时（t=Ns）与子进程汇总（perf: ...），用于性能复测；默认关，不影响任何逻辑与耗时。
+# -Perf：输出分段计时（t=Ns）与调用统计（perf: ...），用于性能复测；默认关，不影响任何逻辑与耗时。
+# 等待策略（2026-10-31 晚改）：点击后只等 800ms 让点击生效、画面开始切换，随后一律靠 OCR/探针轮询判定，
+#   **不再硬等固定秒数**。原「点确定等 4s / 进游戏等 5s / 点开始游戏等 5s」是链路耗时大头——
+#   游戏侧实际 2~3s 就绪，多等的是纯浪费（用户 2026-10-31 现场观察指出）。超时上限不变，只提前退出。
+# 唯一的例外：关礼包弹窗后等 1200ms（等关闭动画+背景回正再判场景），以及翻页动画 900ms。
 param([int]$Pid2 = 0, [int]$Char = 1, [int]$TownTimeoutSec = 90, [switch]$AssumeGold, [switch]$Perf)
 $ErrorActionPreference = 'Stop'
 $scripts = $PSScriptRoot
@@ -67,7 +71,7 @@ $pi = Get-PopupInfo
 if ($pi.Cls -eq "POPUP_PACK") {
     "phase1 POPUP_PACK -> uncheck/close"
     if ($pi.UncheckX -gt 0) { Invoke-Click "$($pi.UncheckX):$($pi.UncheckY):900"; "phase1 uncheck clicked ($($pi.UncheckX),$($pi.UncheckY))" }
-    Invoke-Click "$($pi.CloseX):$($pi.CloseY):2500"
+    Invoke-Click "$($pi.CloseX):$($pi.CloseY):1200"
     $st = Get-State
     $pi = Get-PopupInfo
     "phase1 after close state=$st popup=$($pi.Cls)"
@@ -79,7 +83,7 @@ if ($st -eq "GOLD_DIALOG") {
     if ($pi.Cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
         "STOP: GOLD_DIALOG 分类=$($pi.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
     }
-    Invoke-Click "700:513:4000"
+    Invoke-Click "700:513:800"
     "phase1 confirm clicked cls=$($pi.Cls)$(if ($AssumeGold) { ' (AssumeGold)' } else { '' })"
 }
 
@@ -88,11 +92,11 @@ $loginHit = $false
 $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Date) -lt $deadline) {
     if (Test-OcrTask "server") { $loginHit = $true; break }
-    Start-Sleep -Seconds 2
+    Start-Sleep -Milliseconds 600
 }
 if ($loginHit) {
     "phase2 login page confirmed (server OCR)$(TS)"
-    Invoke-Click "571:527:5000"
+    Invoke-Click "571:527:800"
     "phase2 enter-game clicked$(TS)"
 } else {
     "phase2: 30s 未见登录页（可能已在选角页/加载中），继续按后续阶段判定$(TS)"
@@ -103,7 +107,7 @@ $charselHit = $false
 $deadline = (Get-Date).AddSeconds(20)
 while ((Get-Date) -lt $deadline) {
     if (Test-OcrTask "charsel") { $charselHit = $true; break }
-    Start-Sleep -Seconds 2
+    Start-Sleep -Milliseconds 600
 }
 if (-not $charselHit) { "STOP: 20s 内未确认选角页（「选择角色」标题未命中），截图人工核对"; exit 9 }
 "phase3 charsel confirmed -> wxcharsel char$Char startgame$(TS)"
@@ -127,15 +131,15 @@ while ((Get-Date) -lt $deadline) {
         $packClosed++
         "phase4 POPUP_PACK -> uncheck/close attempt=$packClosed$(TS)"
         if ($pi.UncheckX -gt 0) { Invoke-Click "$($pi.UncheckX):$($pi.UncheckY):900" }
-        Invoke-Click "$($pi.CloseX):$($pi.CloseY):2500"
+        Invoke-Click "$($pi.CloseX):$($pi.CloseY):1200"
         continue
     }
     if ($st -eq "GOLD_DIALOG") {
         if ($idleReclicked -ge 2) { "STOP: 金弹窗反复在屏（分类后仍无法清除），截图人工核对"; exit 9 }
         "phase4 GOLD_DIALOG popup=$($pi.Cls)"
-        if ($pi.Cls -eq "POPUP_IDLE") { $idleReclicked++; Invoke-Click "700:513:4000"; continue }
+        if ($pi.Cls -eq "POPUP_IDLE") { $idleReclicked++; Invoke-Click "700:513:800"; continue }
         "STOP: GOLD_DIALOG 分类=$($pi.Cls)（红线，绝不自动点）"; exit 9
     }
-    Start-Sleep -Seconds 3
+    Start-Sleep -Milliseconds 1000
 }
 "STOP: ${TownTimeoutSec}s 内未到 TOWN_PAGE 终态（加载慢/异常弹窗），截图人工核对"; exit 9

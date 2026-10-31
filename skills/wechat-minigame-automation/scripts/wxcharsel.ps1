@@ -88,12 +88,12 @@ if (-not $StartGame) {
     "charsel done (stopped at charsel page, no start)；进游戏请加 -StartGame"
     exit 0
 }
-Invoke-Click "1018:634:5000"
+Invoke-Click "1018:634:800"
 $deadline = (Get-Date).AddSeconds(15)
 $townHit = $false
 while ((Get-Date) -lt $deadline) {
     if (Test-OcrTask "town") { $townHit = $true; break }
-    Start-Sleep -Seconds 2
+    Start-Sleep -Milliseconds 600
 }
 if ($townHit) { "START ok: town_ocr=HIT (char$Char in town)" }
 else { "WARN: 开始游戏后 15s town 未确认（可能加载慢/弹窗），截图人工核对" }
