@@ -11,7 +11,7 @@
 #                 （2026-10-23 晚重写：模板匹配判定，与血量/tip/底色全部无关）
 #   OCCLUDED      纯色画面（最小化/遮挡/锁屏），先 wxrestore（事件4/15）
 #   TOWN_PAGE     主城（2026-10-31 恢复：战力条/福利/商城 三探针 ≥2 阳性，用户定版；选角/主城 OCR 判据弃用）
-#   NEWBIE_PACK   新手礼包弹窗「勇士启程 ¥30」（涉钱红线：只准点红叉 (160,192) 关闭，绝不点 ¥30 金钮）
+#   （NEWBIE_PACK 已于 2026-10-31 迁出：弹窗一律归 wxpopup 判 POPUP_PACK，probe 只出场景状态）
 #   UNKNOWN       以上都不是（需人工截图确认）
 #                 ⚠️ 登录页仍报 UNKNOWN：LOGIN_PAGE 像素判据已退役（2026-10-27），登录页身份=wxocr -Task server
 #                 （旧「主城报 UNKNOWN」约定 2026-10-31 随三探针恢复而废止，主城不再依赖 OCR）
@@ -70,11 +70,11 @@ $HX0=440; $HY0=655; $HX1=700; $HY1=680
 # 登录页「进入游戏」白色大字区（LX0-LY1 常量已随 LOGIN_PAGE 退役删除，2026-10-27；OCR 判据=wxocr server 任务）
 # 左侧分类栏白字区（排除登录页误报）
 $NX0=30; $NY0=130; $NX1=160; $NY1=520
-# town 三探针区 + 新手礼包 ¥30 金钮区（v1.1.17 接线 2026-10-31 用户定版：三探针 ≥2 阳性=主城）
+# town 三探针区（v1.1.17 接线 2026-10-31 用户定版：三探针 ≥2 阳性=主城）
 $TPX0=230; $TPY0=132; $TPX1=370; $TPY1=172   # 战力条暗红
 $TWX0=658; $TWY0=60;  $TWX1=735; $TWY1=155   # 福利暗金
 $TSX0=848; $TSY0=80;  $TSX1=895; $TSY1=115   # 商城金
-$PKX0=529; $PKY0=520; $PKX1=763; $PKY1=603   # 礼包 ¥30 金钮（弹窗仅酒馆场景出现，用户 2026-10-31 口述；酒馆背景 pack 实测 580）
+# 礼包 ¥30 金钮区 (529,520)-(763,603) 已于 2026-10-31 迁至 _wxcommon.ps1 $WX_PACK_PROBES（归 wxpopup）
 
 function CountPixels([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
   $n = 0
@@ -130,7 +130,7 @@ $predTownGold = { param($c) $c.R -ge 170 -and $c.G -ge 120 -and $c.B -le 140 -an
 $nPower = CountPixelsX2 $TPX0 $TPY0 $TPX1 $TPY1 { param($c) $c.R -ge 100 -and $c.R -le 235 -and $c.G -lt 80 -and $c.B -lt 80 -and ($c.R-$c.G) -gt 60 }
 $nTownW = CountPixelsX2 $TWX0 $TWY0 $TWX1 $TWY1 $predTownGold
 $nShop  = CountPixelsX2 $TSX0 $TSY0 $TSX1 $TSY1 $predTownGold
-$nPack  = CountPixelsX2 $PKX0 $PKY0 $PKX1 $PKY1 $predTownGold
+# 礼包像素计数已随弹窗判定迁至 wxpopup（2026-10-31），probe 不再采样 pack 区
 # 阈值（全分辨率标定÷2）：power 300→150 / welfare 100→50 / shop 60→30 / pack 3000→1500
 $townVotes = ($nPower -ge 150) + ($nTownW -ge 50) + ($nShop -ge 30)
 
@@ -154,13 +154,10 @@ $state = "UNKNOWN"
 #   登录页仍报 UNKNOWN 属预期，身份=wxocr -Task server。）
 #  GOLD 阈值 150→450：真弹窗金确定钮 gold≈1066，主城金图标 gold=193-206 —— 一刀切开
 #  SETTLE_PAGE 加 btnMatch 门控：毁灭之塔红月背景 settle=16-22 但无按钮（dist=1），真结算面板按钮可见
-#  NEWBIE_PACK 必须最先判（v1.1.17）：¥30 金钮区与 GOLD_DIALOG 判定区重叠，晚判会误报挂机弹窗
-#    → 点 (700,513) 擦到 ¥30 金钮（涉钱红线）；挂机「确定」只与礼包区擦 8px 窄边，pack 读数最多 ~1000，撞不到 1500
-#    单判据即安全：礼包弹窗仅酒馆场景出现（用户 2026-10-31 口述），酒馆背景 pack 实测 580，余量 2.6 倍
-if     ($nPack -ge 1500)                                               { $state = "NEWBIE_PACK" } # 礼包 ¥30 金钮（弹窗实测 ~5100，酒馆背景 580）
-elseif (-not $btnMatch -and $nGold -ge 450)                            { $state = "GOLD_DIALOG" } # 金确定钮弹窗（挂机/顶号/死亡，gold≈1066；用 wxpopup 细分）
+#  礼包弹窗自 2026-10-31 起归 wxpopup 判（POPUP_PACK），probe 只管场景状态、不再出弹窗态
+if     (-not $btnMatch -and $nGold -ge 450)                            { $state = "GOLD_DIALOG" } # 金确定钮弹窗（挂机/顶号/死亡，gold≈1066；用 wxpopup 细分）
 elseif ($nSettle -ge 10 -and $btnMatch)                                { $state = "SETTLE_PAGE" } # 真结算：面板按钮可见（战斗中红怪入带误报仍不可修，见档案）
-elseif ($nSettle -ge 10)                                               { $state = "TOWER_PAGE" }  # 塔页红月：settle 命中但无按钮
+elseif ($nSettle -ge 10 -and $nGold -lt 100)                           { $state = "TOWER_PAGE" }  # 塔页红月：settle 命中但无按钮。gold 门控（2026-10-31）：礼包弹窗 settle=50 但 gold=447 会把遮挡画面错说成塔页；塔页 4 样本实测 gold=0，余量极大
 elseif ($dOn  -le 0.60 -and ($dOff - $dOn) -ge 0.10)                   { $state = "AUTO_ON" }
 elseif ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)                   { $state = "AUTO_OFF" }   # 按钮=「自动战斗」(关)
 elseif ($nStam   -ge 60)                                               { $state = "STAMINA_POP" } # 最后判：战斗画面绿色特效会污染 stamina 区
@@ -180,4 +177,4 @@ $page = switch -regex ($state) {
     }
 }
 "PAGE=$page"
-if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp power=$nPower welfare=$nTownW shop=$nShop pack=$nPack townvotes=$townVotes" }
+if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp power=$nPower welfare=$nTownW shop=$nShop townvotes=$townVotes" }

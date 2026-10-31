@@ -199,6 +199,16 @@ function Test-WxMinClientW([int]$clientW) {
     return $true
 }
 
+# ---- 礼包弹窗探测配置（2026-10-31 用户定版：弹窗一律归 wxpopup 判，wxprobe 只管场景状态）----
+# 表驱动：以后遇到新礼包弹窗，标定完在这里追加一行即可，禁止在各脚本里散落坐标/阈值（单源）。
+# 采样口径固定 x+=2 / y 逐行（沿用旧 probe 的 CountPixelsX2），阈值 = 全分辨率标定值 ÷ 2。
+$WX_PACK_PROBES = @(
+    # 勇士启程 ¥30：全分辨率实测 9622 / 关闭后 2754 / 酒馆背景 580
+    @{ Kind = 'newbie'; X0 = 529; Y0 = 520; X1 = 763; Y1 = 603; MinHit = 1500 }
+)
+$WX_PRED_GOLD = { param($c) $c.R -ge 170 -and $c.G -ge 120 -and $c.B -le 140 -and ($c.R - $c.B) -ge 60 }
+$WX_PACK_CLOSE_X = 160; $WX_PACK_CLOSE_Y = 192   # 关闭红叉（设计坐标，见 coords.md「新手礼包弹窗」）
+
 # ---- OCR 关键字 N 字命中容错（2026-10-27 20:3x 用户定版：所有 OCR 匹配点统一 N 字命中，宁宽勿严）----
 # N 按关键字长度自动定：2字=2（无法再宽，1字必撞车）；3-4字=N-1（容1错字）；5-7字=3；8字+=4
 # 依据：不同字段重复概率很小（用户原话）；autobtn 两词共享「自动」2字 < 3，N=3 无交叉误判

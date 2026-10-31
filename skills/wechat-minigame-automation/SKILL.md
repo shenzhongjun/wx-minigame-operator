@@ -86,7 +86,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxpreflight.ps1` | **开局协议预检：校验档案齐全+打印要点摘要** | 无参数 |
 | `wxgrind.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
 | `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto/autonow=委托 wxautoensure（OCR，v1.1.12 旧模板 gated 循环退役） | `-Pid2` |
-| `wxprobe.ps1` | 状态探针（战斗/结算/弹窗/主城三探针/遮挡粗信号；2026-10-31 主城 TOWN_PAGE 三探针恢复、礼包含 NEWBIE_PACK，登录页仍 OCR `server`） | `-Pid2 -Debug` |
+| `wxprobe.ps1` | 状态探针（战斗/结算/主城三探针/遮挡粗信号；2026-10-31 主城 TOWN_PAGE 三探针恢复；**礼包弹窗已迁出，弹窗一律看 wxpopup**，登录页仍 OCR `server`） | `-Pid2 -Debug` |
 | `wxlogin.ps1` | 固化登录链 v3（2026-10-27 拆分定版：只管登录）：GOLD_DIALOG 先 wxpopup OCR 分类——POPUP_IDLE（挂机）自动点确定重登，其余类别（顶号/涉钱/未知）红线停机；登录页进入游戏→OCR 确认选角页**即止**（角色选择移交 wxcharsel；旧卡表已删，翻页≠选卡教训见 coords.md 角色卡行） | `-AssumeGold` |
 | `wxcharsel.ps1` | **选角专职（2026-10-27 新增，卡表单源）**：起始态自适应进选角页（主城点「选角」带3次重试）→ scr1w/scr2w 判屏 → 按需切屏复核 → 幂等双击目标卡；`-StartGame` 进游戏+town 终态确认，默认停选角页。卡表坐标见 coords.md「角色卡」行（脚本内单源）；**7/8 锁槽红线禁点** | `-Char 1..6 -StartGame` |
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
@@ -104,7 +104,9 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxnav-tower.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段断言（A 副本tab金≥150 / B 塔页红≥100 / **C 练习说明框白字块≥400**，断言区域见 coords.md「毁灭之塔」节）失败即截图停机 | `-Pid2 -SkipStart` |
 | `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxwait/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/轮询等待指定状态/枚举窗口/文档规则校验（~~wxocrbtn~~ 已删，v1.1.3 并入 wxocr） | 见脚本头 |
 
-探针状态动作：`NEWBIE_PACK`→点关闭红叉关弹窗（🚨涉钱红线：绝不点 ¥30 金钮，红叉坐标见 coords.md「新手礼包弹窗」行），关后重探；`GOLD_DIALOG`→按专家红线处理；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`TOWN_PAGE`→主城，正常流程；`UNKNOWN`→人工截图（登录页/选角页 UNKNOWN 属预期——页面身份以 OCR 为准；主城自 2026-10-31 起由三探针判 TOWN_PAGE，不再依赖 OCR）。
+探针状态动作：`GOLD_DIALOG`→按专家红线处理（先 `wxpopup` 分类再决定）；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`TOWN_PAGE`→主城，正常流程；`UNKNOWN`→人工截图（登录页/选角页 UNKNOWN 属预期——页面身份以 OCR 为准；主城自 2026-10-31 起由三探针判 TOWN_PAGE，不再依赖 OCR）。
+
+**弹窗一律归 `wxpopup` 判**（2026-10-31 用户定版：probe 是状态探针，不再出弹窗态）：`POPUP_PACK`→点关闭红叉关礼包弹窗（🚨涉钱红线：绝不点 ¥30 金钮，红叉 (160,192) 见 coords.md）关后重探；`POPUP_IDLE`→点确定；`POPUP_EXTEND`→只点取消；`POPUP_REVIVE`→点确定；`POPUP_RELOGIN`/`POPUP_UNKNOWN`→红线停机请示用户。
 
 **硬性路径约束：本 skill 随专家包安装，所有脚本只准写进本 skill 目录下的 `scripts\`（实际安装路径未知时，先跑 preflight 或 Glob 搜 `wxpreflight.ps1` 定位，绝不凭记忆猜路径），严禁 Temp/临时目录**
 

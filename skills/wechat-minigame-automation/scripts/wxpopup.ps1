@@ -46,6 +46,21 @@ if ($Img -ne "") {
     $bmp = Get-DesignBitmap $geo
 }
 
+# ---- 1.5) 礼包弹窗（2026-10-31 用户定版接管自 wxprobe：弹窗一律归 popup，probe 只管场景状态）----
+# 配置在 _wxcommon.ps1 的 $WX_PACK_PROBES（表驱动，新礼包标定后追加一行，勿在此散落坐标）。
+# 采样口径与旧 probe 完全一致：x+=2 / y 逐行，阈值=全分辨率标定值÷2（数值不可与 probe 时代混用）。
+# 必须先于金确定钮判：礼包 ¥30 金钮与挂机「确定」只擦 8px 窄边，若先判金钮可能误分类成 IDLE 并去点确定。
+foreach ($pk in $WX_PACK_PROBES) {
+    $nPk = 0
+    for ($y = $pk.Y0; $y -le $pk.Y1; $y++) { for ($x = $pk.X0; $x -le $pk.X1; $x += 2) {
+        if (& $WX_PRED_GOLD $bmp.GetPixel($x, $y)) { $nPk++ }
+    } }
+    if ($nPk -ge $pk.MinHit) {
+        "POPUP=POPUP_PACK kind=$($pk.Kind) pack=$nPk ocr_raw=[] close=$($WX_PACK_CLOSE_X),$($WX_PACK_CLOSE_Y)"
+        exit 0
+    }
+}
+
 # ---- 2) 金确定钮计数 ----
 $goldBtn = 0
 for ($y = $GOLDY0; $y -le $GOLDY1; $y += 2) { for ($x = $GOLDX0; $x -le $GOLDX1; $x += 2) {
