@@ -59,7 +59,8 @@ function Get-PopupInfo {
     return $i
 }
 function Invoke-Click([string]$steps) {
-    Invoke-Sub 'wxclick.ps1' @('-Pid2', $Pid2, '-Steps', $steps) | Out-Null
+    # 同进程调用（原为 wxclick.ps1 子进程）：省掉每次约 1.3s 进程启动。失败不影响主流程，靠后续状态判定兜底。
+    try { $null = Invoke-WxClick -Steps $steps -Pid2 $Pid2 } catch { }
 }
 
 # ---- 阶段1：金弹窗处理（红线分类）----

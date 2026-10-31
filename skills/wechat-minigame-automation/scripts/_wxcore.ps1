@@ -438,3 +438,64 @@ function Invoke-WxOcr {
     }
     return $last
 }
+
+# ================= 点击器（2026-10-31 迁入）=================
+# Steps 语法与语义零改动：x:y:delayMs 点击并等待 / w:ms 纯等待 / auto 委托 wxautoensure。
+# 迁入收益：链路内每次点击省一次子进程启动（约 1.3s）；重登链全程 6 次点击。
+function New-WxClickResult {
+    param([int]$ExitCode = 0, [string]$Err = "", [string[]]$Log = @())
+    [pscustomobject]@{ ExitCode = $ExitCode; Err = $Err; Log = $Log }
+}
+
+# IN : 游戏窗口存在（可被拉前台）
+# OUT: Log 内逐条为实际点击落点；ExitCode 0=全部执行完，7=前台/最小窗守卫拒绝，3=auto 步骤失败，1=窗口未找到
+function Invoke-WxClick {
+    param([string]$Steps = "", [int]$Pid2 = 0)
+
+    $log = New-Object System.Collections.ArrayList
+    $h = Find-GameWindow -Pid2 $Pid2
+    if ($h -eq [IntPtr]::Zero) { return (New-WxClickResult -ExitCode 1 -Err "window not found (pid=$Pid2)") }
+    [WXCommon]::SetForegroundWindow($h) | Out-Null
+    Start-Sleep -Milliseconds 350
+    if (-not (Confirm-WxForeground $h)) {
+        return (New-WxClickResult -ExitCode 7 -Err "game not foreground (拉回重试后仍不在前台)，拒绝点击" -Log @("DONE"))
+    }
+    $geo = Get-ClientGeometry $h
+    if (-not (Test-WxMinClientW $geo.W)) {
+        return (New-WxClickResult -ExitCode 7 -Err "window too small ($($geo.W)x$($geo.H) < ${WX_MIN_CLIENT_W} width)，拒绝点击" -Log @("DONE"))
+    }
+    [void]$log.Add("client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))")
+
+    foreach ($step in $Steps.Split(";")) {
+        if ($step.Trim() -eq "") { continue }
+        if ($step.StartsWith("w:")) { Start-Sleep -Milliseconds ([int]$step.Substring(2)); continue }
+        if ($step.Trim() -eq "auto" -or $step.Trim() -eq "autonow") {
+            $ens = & (Join-Path $PSScriptRoot 'wxautoensure.ps1') -Pid2 $Pid2 2>&1
+            foreach ($l in $ens) { [void]$log.Add("$l") }
+            if (($ens -join "`n") -notmatch 'AUTO_ENSURED') {
+                [void]$log.Add("AUTO_ENSURE_FAIL(delegated to wxautoensure)")
+                [void]$log.Add("DONE")
+                return (New-WxClickResult -ExitCode 3 -Log $log.ToArray())
+            }
+            continue
+        }
+        $parts = $step.Split(":")
+        $x = [int]$parts[0]; $y = [int]$parts[1]
+        $d = 250
+        if ($parts.Length -gt 2) { $d = [int]$parts[2] }
+        # 每步点击前重读几何：窗口在多次点击间可能被移动/改尺寸
+        $g = Get-ClientGeometry $h
+        $p = ConvertTo-ScreenPoint $g $x $y
+        $ax = $p.X; $ay = $p.Y
+        Start-Sleep -Milliseconds 250
+        [WXCommon]::SetCursorPos($ax, $ay) | Out-Null
+        Start-Sleep -Milliseconds 100
+        [WXCommon]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 70
+        [WXCommon]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+        [void]$log.Add("click=$x,$y -> $ax,$ay")
+        if ($d -gt 0) { Start-Sleep -Milliseconds $d }
+    }
+    [void]$log.Add("DONE")
+    return (New-WxClickResult -ExitCode 0 -Log $log.ToArray())
+}

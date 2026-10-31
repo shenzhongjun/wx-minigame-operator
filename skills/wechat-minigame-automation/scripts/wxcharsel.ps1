@@ -27,7 +27,10 @@ $card = @{ 1 = "138:342"; 2 = "421:342"; 3 = "704:340"; 4 = "987:340"; 5 = "138:
 $targetScreen = if ($Char -le 4) { 1 } else { 2 }
 
 function Invoke-Click([string]$steps) {
-    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
+    # 同进程调用（原为 wxclick.ps1 子进程）：省掉每次约 1.3s 进程启动。日志走 Write-Host，不污染返回值。
+    try { $r = Invoke-WxClick -Steps $steps -Pid2 $Pid2 } catch { Write-Host "click ERR: $_"; return }
+    if ($r.Err) { Write-Host "click ERR: $($r.Err)"; return }
+    foreach ($l in $r.Log) { if ($l -ne 'DONE') { Write-Host "$l" } }
 }
 function Test-OcrTask([string]$task) {
     # 同进程调用（原为 wxocr.ps1 子进程）；引擎缓存后每次约 0.25s
