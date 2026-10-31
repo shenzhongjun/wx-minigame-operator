@@ -4,6 +4,24 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.1 --stat`（两版间文件差异）。
 
+## [1.1.20] - 2026-10-31
+
+**主题：金卡特权礼包弹窗标定入表（表驱动扩展三控件）+ 像素采样 LockBits 化（probe 9.2s→2.0s）+ 角色 7 卡位开放**
+
+### 改动
+- **金卡特权礼包（¥68）标定**：`$WX_PACK_PROBES` 表结构扩为 `Kind / 区域 / MinHit / CloseX,Y / UncheckX,Y / Tag 区域+TagMin`；金卡独占底部「今日不再弹出」白字判据 `(585,612)-(665,635)`（实测 309，新手礼包同区 0，threshold 150），因两弹窗金钮区完全重合（金卡 5287 / 新手 5101）无法靠金色区分。三控件：关闭金叉 **(284,211)**、「今日不再弹出」勾选框 **(568,622)**、¥68 购买钮 bbox 仅记录**严禁点击**。匹配按数组顺序，带 Tag 的特异项在前、无 Tag 兜底。
+- **处置顺序**：`wxrelogin` 的 `Get-PopupClass` → `Get-PopupInfo`（解析 close/uncheck），`POPUP_PACK` 分支改为**先点 uncheck 再点 close**；新手礼包 `uncheck=0,0` 自动跳过。
+- **像素采样 LockBits 化**：新增 `_wxcommon` 的 `Init-PxBuf` / `Count-PxBox`，整图一次性取字节 + 数组索引 + 整数谓词 id，替代逐像素 `$bmp.GetPixel()` + scriptblock（单次约 0.2ms，一笔 probe 约 4.3 万次）。`wxprobe` 与 `wxpopup` 共用同一实现。**区域/采样步长/阈值语义一律未动**。
+- **礼包 MinHit 1500→3000**：实机暴露主城酒馆背景金钮区实测 1545，越 1500 线导致弹窗关闭后立刻误判 `kind=newbie` 并空点红叉；真弹窗 5101/4712 仍有 1.6~1.7 倍余量。
+- **角色 7 开放**：`wxcharsel` 卡表 1-6 → 1-7，新增 `7 = "704:370"`（第二屏第 3 位，耀石之达彼特）；8 号槽未建号仍锁。
+
+### 验证
+- **20 张回归图零漂移**：`STATE` 与 `-Debug` 全部原始计数（gold/stamina/settle/side/hp/power/welfare/shop/townvotes）与改前基线**逐项完全相同**（基线存 `冒烟测试\probe-perf-baseline-20261031.txt`）。
+- **性能实测**：`wxprobe` 9327/8948/9261ms → 3076/2325/2147ms；`wxpopup` ~7.0s → 4.4s。
+- **分类验证**：金卡原图 `kind=jinka pack=4712 close=284,211 uncheck=568,622`；新手礼包 `kind=newbie pack=5101 close=160,192`；主城实时与 s1_town 均 `POPUP_NONE`。
+- **实机验证（2026-10-31 20:47~20:53）**：金卡弹窗 uncheck (568,622) → close (284,211) 执行后弹窗正确关闭（pack 5287→1545，状态回 `TOWN_PAGE`）；**「今日不再弹出」勾选生效经用户现场目验确认**。
+- `wxrelogin -Char 7` 实机通过（86s，`EXIT=0`）；4 脚本 BOM + Parser 校验通过。
+
 ## [1.1.19] - 2026-10-31
 
 **主题：弹窗判据全部收敛到 wxpopup（礼包弹窗 POPUP_PACK）+ 最小窗口 800 守卫单源化 + wxrelogin 组合重登链实机验证通过**
