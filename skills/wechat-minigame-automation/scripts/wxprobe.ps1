@@ -10,9 +10,11 @@
 #   AUTO_OFF      按钮模板匹配=「自动战斗」→ 未开启（补开唯一入口=wxautoensure，勿手点坐标）
 #                 （2026-10-23 晚重写：模板匹配判定，与血量/tip/底色全部无关）
 #   OCCLUDED      纯色画面（最小化/遮挡/锁屏），先 wxrestore（事件4/15）
+#   TOWN_PAGE     主城（2026-10-31 恢复：战力条/福利/商城 三探针 ≥2 阳性，用户定版；选角/主城 OCR 判据弃用）
+#   NEWBIE_PACK   新手礼包弹窗「勇士启程 ¥30」（涉钱红线：只准点红叉 (160,192) 关闭，绝不点 ¥30 金钮）
 #   UNKNOWN       以上都不是（需人工截图确认）
-#                 ⚠️ 2026-10-27 起 主城/登录页均报 UNKNOWN：TOWN_PAGE+LOGIN_PAGE 像素判据退役，
-#                 页面身份以 OCR 为准——主城=wxocr -Task town，登录页=wxocr -Task server
+#                 ⚠️ 登录页仍报 UNKNOWN：LOGIN_PAGE 像素判据已退役（2026-10-27），登录页身份=wxocr -Task server
+#                 （旧「主城报 UNKNOWN」约定 2026-10-31 随三探针恢复而废止，主城不再依赖 OCR）
 # -Img <png>：离线分析整客户端区截图（任意尺寸自动归一化到 1138x708；回归/标定用，跳过窗口查找与纯色守卫）
 # -Quick：轻量模式（等待结算轮询用）——只算 金弹窗/结算带/体力弹窗 三个廉价特征，
 #         跳过 模板/CHAR/血条/登录侧栏（省 ~60% 像素扫描）；输出状态限定 GOLD_DIALOG/SETTLE_PAGE/STAMINA_POP/UNKNOWN
@@ -60,12 +62,27 @@ $HX0=440; $HY0=655; $HX1=700; $HY1=680
 # 登录页「进入游戏」白色大字区（LX0-LY1 常量已随 LOGIN_PAGE 退役删除，2026-10-27；OCR 判据=wxocr server 任务）
 # 左侧分类栏白字区（排除登录页误报）
 $NX0=30; $NY0=130; $NX1=160; $NY1=520
+# town 三探针区 + 新手礼包 ¥30 金钮区（v1.1.17 接线 2026-10-31 用户定版：三探针 ≥2 阳性=主城）
+$TPX0=230; $TPY0=132; $TPX1=370; $TPY1=172   # 战力条暗红
+$TWX0=658; $TWY0=60;  $TWX1=735; $TWY1=155   # 福利暗金
+$TSX0=848; $TSY0=80;  $TSX1=895; $TSY1=115   # 商城金
+$PKX0=529; $PKY0=520; $PKX1=763; $PKY1=603   # 礼包 ¥30 金钮
+$XX0=152;  $XY0=184;  $XX1=168;  $XY1=200    # 礼包关闭红叉（¥30 单判据会被烟花背景金色爆炸击穿，必须红叉双条件）
 
 function CountPixels([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
   $n = 0
   for ($y=$y0; $y -le $y1; $y+=2) { for ($x=$x0; $x -le $x1; $x+=2) {
     $c = $bmp.GetPixel($x,$y)
     if (& $pred $c) { $n++ }
+  }}
+  return $n
+}
+# town 探针专用：只隔列采样（x+=2，y 逐行）。阈值=蓝本 town4-probe.ps1 全分辨率标定值÷2；
+#   2×2 隔行对 pack 区细纹理走样风险大（9610/4=2402 距 750 仅 3.4% 余量）故弃，逐行无此问题。
+function CountPixelsX2([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
+  $n = 0
+  for ($y=$y0; $y -le $y1; $y++) { for ($x=$x0; $x -le $x1; $x+=2) {
+    if (& $pred $bmp.GetPixel($x,$y)) { $n++ }
   }}
   return $n
 }
@@ -101,6 +118,24 @@ $nHp = CountPixels $HX0 $HY0 $HX1 $HY1 { param($c) (($c.G -gt 140 -and ($c.G-$c.
 # 左侧分类栏白字（nLogin 已随 LOGIN_PAGE 退役删除，2026-10-27）
 $nSide = CountPixels $NX0 $NY0 $NX1 $NY1 { param($c) $c.R -gt 215 -and $c.G -gt 215 -and $c.B -gt 215 }
 
+# town 三探针 + 新手礼包 ¥30（v1.1.17；区域/谓词/阈值权威=coords.md「town 探针判据」节）
+$predTownGold = { param($c) $c.R -ge 170 -and $c.G -ge 120 -and $c.B -le 140 -and ($c.R-$c.B) -ge 60 }
+$nPower = CountPixelsX2 $TPX0 $TPY0 $TPX1 $TPY1 { param($c) $c.R -ge 100 -and $c.R -le 235 -and $c.G -lt 80 -and $c.B -lt 80 -and ($c.R-$c.G) -gt 60 }
+$nTownW = CountPixelsX2 $TWX0 $TWY0 $TWX1 $TWY1 $predTownGold
+$nShop  = CountPixelsX2 $TSX0 $TSY0 $TSX1 $TSY1 $predTownGold
+$nPack  = CountPixelsX2 $PKX0 $PKY0 $PKX1 $PKY1 $predTownGold
+# 阈值（全分辨率标定÷2）：power 300→150 / welfare 100→50 / shop 60→30 / pack 3000→1500
+$townVotes = ($nPower -ge 150) + ($nTownW -ge 50) + ($nShop -ge 30)
+# 红叉区全分辨率计数（逐像素，区小 17x17=289px 成本可忽略）：实测真弹窗 102 / 主城四背景(含烟花) 全 0 / 副本页 ~36，阈值 40
+function CountPixelsFull([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
+  $n = 0
+  for ($y=$y0; $y -le $y1; $y++) { for ($x=$x0; $x -le $x1; $x++) {
+    if (& $pred $bmp.GetPixel($x,$y)) { $n++ }
+  }}
+  return $n
+}
+$nRedX = CountPixelsFull $XX0 $XY0 $XX1 $XY1 { param($c) $c.R -ge 140 -and ($c.R-$c.G) -ge 60 -and ($c.R-$c.B) -ge 60 }
+
 # 左上角按钮文字模板匹配（AUTO_ON/AUTO_OFF 判定唯一来源；区域/模板由 _wxcommon 单源提供）
 $tpl = Import-WxBtnTemplates
 $live = Get-WxBmpMask $bmp $WX_BTN_X0 $WX_BTN_Y0
@@ -116,18 +151,22 @@ $btnMatch = (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -a
 #   选角页身份改由 wxocr.ps1 -Task charsel 权威判定（读「选择角色」标题，粗字形抗缩放）。
 $bmp.Dispose()
 $state = "UNKNOWN"
-# 状态机（2026-10-25 晚 PAGE 重标定；2026-10-27 TOWN_PAGE+LOGIN_PAGE 退役——
-#   主城像素签名对背景脆弱（三背景实测中下金带 snow/crowd=0），登录页 nLogin 美术改版后 389 卡阈值 400 边缘拉跨；
-#   用户定版：页面身份一律 OCR。主城=wxocr -Task town，登录页=wxocr -Task server。
-#   wxprobe 在主城/登录页将报 UNKNOWN，属预期。）
+# 状态机（2026-10-25 晚 PAGE 重标定；2026-10-27 TOWN_PAGE+LOGIN_PAGE 像素判据退役，页面身份一律 OCR；
+#   2026-10-31 TOWN_PAGE 以三探针判据恢复（对背景鲁棒，4 正 6 负全分对+实机验证），选角/主城 OCR 判据弃用；
+#   登录页仍报 UNKNOWN 属预期，身份=wxocr -Task server。）
 #  GOLD 阈值 150→450：真弹窗金确定钮 gold≈1066，主城金图标 gold=193-206 —— 一刀切开
 #  SETTLE_PAGE 加 btnMatch 门控：毁灭之塔红月背景 settle=16-22 但无按钮（dist=1），真结算面板按钮可见
-if     (-not $btnMatch -and $nGold -ge 450)                            { $state = "GOLD_DIALOG" } # 金确定钮弹窗（挂机/顶号/死亡，gold≈1066；用 wxpopup 细分）
+#  NEWBIE_PACK 必须最先判（v1.1.17）：¥30 金钮区与 GOLD_DIALOG 判定区重叠，晚判会误报挂机弹窗
+#    → 点 (700,513) 擦到 ¥30 金钮（涉钱红线）；挂机「确定」只与礼包区擦 8px 窄边，pack 读数最多 ~1000，撞不到 1500
+#    ⚠️ 双条件（¥30 金钮 + 红叉）：烟花背景金色爆炸可把 pack 区打到 14618（超真弹窗 10206），红叉区实测主城全 0/弹窗 102
+if     ($nPack -ge 1500 -and $nRedX -ge 40)                            { $state = "NEWBIE_PACK" } # ¥30 金钮(实测5101)+红叉(实测102) 双判据
+elseif (-not $btnMatch -and $nGold -ge 450)                            { $state = "GOLD_DIALOG" } # 金确定钮弹窗（挂机/顶号/死亡，gold≈1066；用 wxpopup 细分）
 elseif ($nSettle -ge 10 -and $btnMatch)                                { $state = "SETTLE_PAGE" } # 真结算：面板按钮可见（战斗中红怪入带误报仍不可修，见档案）
 elseif ($nSettle -ge 10)                                               { $state = "TOWER_PAGE" }  # 塔页红月：settle 命中但无按钮
 elseif ($dOn  -le 0.60 -and ($dOff - $dOn) -ge 0.10)                   { $state = "AUTO_ON" }
 elseif ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)                   { $state = "AUTO_OFF" }   # 按钮=「自动战斗」(关)
 elseif ($nStam   -ge 60)                                               { $state = "STAMINA_POP" } # 最后判：战斗画面绿色特效会污染 stamina 区
+elseif ($townVotes -ge 2)                                              { $state = "TOWN_PAGE" }   # 主城三探针 2/3 阳性（2026-10-31 用户定版）
 "STATE=$state"
 # PAGE 附加行（信息用，页面身份签名标定 2026-10-25：主城 193/186、副本 side=461、选角 side=486+、塔页 16-22/17-23、世界地图全 0）
 # ⚠️ 选角页权威判定=wxocr -Task charsel（OCR「选择角色」标题）；此处 side 兜底仅作粗信号，副本页 side=461 也会过线
@@ -135,6 +174,7 @@ elseif ($nStam   -ge 60)                                               { $state 
 $page = switch -regex ($state) {
     "SETTLE_PAGE|AUTO_ON|AUTO_OFF" { if ($nSettle -ge 10) { "SETTLE" } else { "BATTLE" } }
     "TOWER_PAGE" { "TOWER" }
+    "TOWN_PAGE" { "TOWN" }
     default {
         if ($nSide -ge 400) { "CHARSEL" }
         elseif (($nSide -lt 50) -and ($nGold -lt 50) -and ($nSettle -lt 5)) { "WORLD_MAP" }
@@ -142,4 +182,4 @@ $page = switch -regex ($state) {
     }
 }
 "PAGE=$page"
-if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp" }
+if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp power=$nPower welfare=$nTownW shop=$nShop pack=$nPack redx=$nRedX townvotes=$townVotes" }
