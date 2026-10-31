@@ -201,13 +201,63 @@ function Test-WxMinClientW([int]$clientW) {
 
 # ---- 礼包弹窗探测配置（2026-10-31 用户定版：弹窗一律归 wxpopup 判，wxprobe 只管场景状态）----
 # 表驱动：以后遇到新礼包弹窗，标定完在这里追加一行即可，禁止在各脚本里散落坐标/阈值（单源）。
-# 采样口径固定 x+=2 / y 逐行（沿用旧 probe 的 CountPixelsX2），阈值 = 全分辨率标定值 ÷ 2。
+# 采样口径固定 x+=2 / y 逐行，阈值 = 全分辨率标定值 ÷ 2。
+# 匹配顺序=数组顺序，先特异后兜底：带 Tag 的（如金卡，靠底部「今日不再弹出」白字区分）必须排在无 Tag 的前面。
+#   CloseX/Y  = 关闭按钮（newbie 左上红叉 / jinka 左上金叉）
+#   UncheckX/Y= 关闭前要点的勾选框（0,0 = 无）
+#   Tag*      = 区分信号区与最小命中（TagMin=0 表示不判）
 $WX_PACK_PROBES = @(
-    # 勇士启程 ¥30：全分辨率实测 9622 / 关闭后 2754 / 酒馆背景 580
-    @{ Kind = 'newbie'; X0 = 529; Y0 = 520; X1 = 763; Y1 = 603; MinHit = 1500 }
+    # 金卡特权 ¥68：金钮区与 newbie 重合（实测宽谓词 5287 / 严谓词 4888），靠底部「今日不再弹出」白字区分（实测 309，新手礼包同区 0）
+    # 金叉实测 bbox (273,201)-(295,221) → 中心 (284,211)；勾选框 (568,622) 为文字左界 585 左移推算，待实机点击验证
+    @{ Kind = 'jinka';  X0 = 529; Y0 = 520; X1 = 763; Y1 = 603; MinHit = 1500
+       CloseX = 284; CloseY = 211; UncheckX = 568; UncheckY = 622
+       TagX0 = 585; TagY0 = 612; TagX1 = 665; TagY1 = 635; TagMin = 150 }
+    # 勇士启程 ¥30：全分辨率实测 9622 / 关闭后 2754 / 酒馆背景 580；红叉 (160,192)
+    @{ Kind = 'newbie'; X0 = 529; Y0 = 520; X1 = 763; Y1 = 603; MinHit = 1500
+       CloseX = 160; CloseY = 192; UncheckX = 0; UncheckY = 0
+       TagX0 = 0; TagY0 = 0; TagX1 = 0; TagY1 = 0; TagMin = 0 }
 )
 $WX_PRED_GOLD = { param($c) $c.R -ge 170 -and $c.G -ge 120 -and $c.B -le 140 -and ($c.R - $c.B) -ge 60 }
-$WX_PACK_CLOSE_X = 160; $WX_PACK_CLOSE_Y = 192   # 关闭红叉（设计坐标，见 coords.md「新手礼包弹窗」）
+$WX_PACK_CLOSE_X = 160; $WX_PACK_CLOSE_Y = 192   # 兼容旧引用（新手礼包红叉）
+
+# ---- 位图像素缓冲（2026-10-31 性能重写，wxprobe / wxpopup 共用）----
+# 逐像素 $bmp.GetPixel() 单次 ~0.2ms，一笔 probe 4.3 万次 ≈ 9s；改 LockBits 一次取整图字节后按索引读。
+# 锁位用图像自身 PixelFormat（24bpp=Rgb / 32bpp=Argb 都是 BGR 顺序），不做格式转换，避免 ±1 色彩漂移。
+$script:PxBuf = $null; $script:PxStride = 0; $script:PxBpp = 4
+function Init-PxBuf([System.Drawing.Bitmap]$bmp) {
+    $rect = New-Object System.Drawing.Rectangle 0, 0, $bmp.Width, $bmp.Height
+    $bpp = [int]([System.Drawing.Image]::GetPixelFormatSize($bmp.PixelFormat) / 8)
+    $work = $bmp; $disposeWork = $false
+    if ($bpp -lt 3) {
+        $work = New-Object System.Drawing.Bitmap $bmp.Width, $bmp.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $gg = [System.Drawing.Graphics]::FromImage($work)
+        $gg.DrawImage($bmp, 0, 0, $bmp.Width, $bmp.Height); $gg.Dispose()
+        $bpp = 4; $disposeWork = $true
+    }
+    $data = $work.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly, $work.PixelFormat)
+    $script:PxStride = $data.Stride
+    $script:PxBpp = $bpp
+    $script:PxBuf = New-Object byte[] ($data.Stride * $bmp.Height)
+    [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $script:PxBuf, 0, $script:PxBuf.Length)
+    $work.UnlockBits($data)
+    if ($disposeWork) { $work.Dispose() }
+}
+# 区域内计数：stepX/stepY 采样步长；pred: 1=金按钮 3=白 5=town金 7=严金(gold2)
+function Count-PxBox([int]$x0, [int]$y0, [int]$x1, [int]$y1, [int]$pred, [int]$stepX = 1, [int]$stepY = 1) {
+    $buf = $script:PxBuf; $st = $script:PxStride; $bp = $script:PxBpp; $n = 0
+    for ($y = $y0; $y -le $y1; $y += $stepY) {
+        $row = $y * $st
+        for ($x = $x0; $x -le $x1; $x += $stepX) {
+            $i = $row + ($x * $bp)
+            $b = $buf[$i]; $g = $buf[$i+1]; $r = $buf[$i+2]
+            if ($pred -eq 1) { if ($r -gt 200 -and $g -gt 140 -and $b -lt 110 -and ($r-$b) -gt 90) { $n++ } }
+            elseif ($pred -eq 3) { if ($r -ge 205 -and $g -ge 205 -and $b -ge 205) { $n++ } }
+            elseif ($pred -eq 7) { if ($r -ge 215 -and $g -ge 185 -and $b -le 120 -and ($r-$b) -ge 100) { $n++ } }
+            else { if ($r -ge 170 -and $g -ge 120 -and $b -le 140 -and ($r-$b) -ge 60) { $n++ } }
+        }
+    }
+    return $n
+}
 
 # ---- OCR 关键字 N 字命中容错（2026-10-27 20:3x 用户定版：所有 OCR 匹配点统一 N 字命中，宁宽勿严）----
 # N 按关键字长度自动定：2字=2（无法再宽，1字必撞车）；3-4字=N-1（容1错字）；5-7字=3；8字+=4

@@ -34,10 +34,15 @@ function Test-OcrTask([string]$task) {
     $joined = $out -join ' '
     return ($joined -match "OCR=$task=HIT")
 }
-function Get-PopupClass {
+function Get-PopupInfo {
     $out = Invoke-Sub 'wxpopup.ps1' @('-Pid2', $Pid2)
-    foreach ($line in $out) { if ("$line" -match 'POPUP=(POPUP_\w+)') { return $Matches[1] } }
-    return "POPUP_UNKNOWN"
+    $i = @{ Cls = 'POPUP_UNKNOWN'; CloseX = 0; CloseY = 0; UncheckX = 0; UncheckY = 0 }
+    foreach ($line in $out) {
+        if ("$line" -match 'POPUP=(POPUP_\w+)') { $i.Cls = $Matches[1] }
+        if ("$line" -match 'close=(\d+),(\d+)') { $i.CloseX = [int]$Matches[1]; $i.CloseY = [int]$Matches[2] }
+        if ("$line" -match 'uncheck=(\d+),(\d+)') { $i.UncheckX = [int]$Matches[1]; $i.UncheckY = [int]$Matches[2] }
+    }
+    return $i
 }
 function Invoke-Click([string]$steps) {
     Invoke-Sub 'wxclick.ps1' @('-Pid2', $Pid2, '-Steps', $steps) | Out-Null
@@ -49,19 +54,20 @@ $st = Get-State
 if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
 # 弹窗优先（2026-10-31 定版：弹窗一律归 wxpopup 判）。礼包弹窗压屏时 probe 只能报 UNKNOWN，
 # 必须先关掉再判场景——否则后面 server/charsel OCR 全被弹窗挡住，白等 50 秒才失败。
-$cls = Get-PopupClass
-if ($cls -eq "POPUP_PACK") {
-    "phase1 POPUP_PACK -> close X"
-    Invoke-Click "160:192:2500"
+$pi = Get-PopupInfo
+if ($pi.Cls -eq "POPUP_PACK") {
+    "phase1 POPUP_PACK -> uncheck/close"
+    if ($pi.UncheckX -gt 0) { Invoke-Click "$($pi.UncheckX):$($pi.UncheckY):900"; "phase1 uncheck clicked ($($pi.UncheckX),$($pi.UncheckY))" }
+    Invoke-Click "$($pi.CloseX):$($pi.CloseY):2500"
     $st = Get-State
-    $cls = Get-PopupClass
-    "phase1 after close state=$st popup=$cls"
+    $pi = Get-PopupInfo
+    "phase1 after close state=$st popup=$($pi.Cls)"
 }
 if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) { "STOP: state=$st 已在游戏内，重登链不适用"; exit 9 }
 if ($st -eq "GOLD_DIALOG") {
-    "phase1 popup=$cls t=$(Now-S)s"
-    if ($cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
-        "STOP: GOLD_DIALOG 分类=$cls（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
+    "phase1 popup=$($pi.Cls) t=$(Now-S)s"
+    if ($pi.Cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
+        "STOP: GOLD_DIALOG 分类=$($pi.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
     }
     Invoke-Click "700:513:4000"
     "phase1 idle-confirm clicked"
@@ -105,19 +111,20 @@ $deadline = (Get-Date).AddSeconds($TownTimeoutSec)
 while ((Get-Date) -lt $deadline) {
     $st = Get-State
     if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed t=$(Now-S)s"; "perf: subprocess=$SubN calls / $([int]($SubMs/1000))s"; exit 0 }
-    $cls = Get-PopupClass
-    if ($cls -eq "POPUP_PACK") {
-        if ($packClosed -ge 3) { "STOP: 礼包红叉已点 3 次仍未清除，截图人工核对"; exit 9 }
+    $pi = Get-PopupInfo
+    if ($pi.Cls -eq "POPUP_PACK") {
+        if ($packClosed -ge 3) { "STOP: 礼包弹窗红叉已点 3 次仍未清除，截图人工核对"; exit 9 }
         $packClosed++
-        "phase4 POPUP_PACK -> close X attempt=$packClosed"
-        Invoke-Click "160:192:2500"
+        "phase4 POPUP_PACK -> uncheck/close attempt=$packClosed t=$(Now-S)s"
+        if ($pi.UncheckX -gt 0) { Invoke-Click "$($pi.UncheckX):$($pi.UncheckY):900" }
+        Invoke-Click "$($pi.CloseX):$($pi.CloseY):2500"
         continue
     }
     if ($st -eq "GOLD_DIALOG") {
         if ($idleReclicked -ge 2) { "STOP: 金弹窗反复在屏（分类后仍无法清除），截图人工核对"; exit 9 }
-        "phase4 GOLD_DIALOG popup=$cls"
-        if ($cls -eq "POPUP_IDLE") { $idleReclicked++; Invoke-Click "700:513:4000"; continue }
-        "STOP: GOLD_DIALOG 分类=$cls（红线，绝不自动点）"; exit 9
+        "phase4 GOLD_DIALOG popup=$($pi.Cls)"
+        if ($pi.Cls -eq "POPUP_IDLE") { $idleReclicked++; Invoke-Click "700:513:4000"; continue }
+        "STOP: GOLD_DIALOG 分类=$($pi.Cls)（红线，绝不自动点）"; exit 9
     }
     Start-Sleep -Seconds 3
 }

@@ -46,27 +46,27 @@ if ($Img -ne "") {
     $bmp = Get-DesignBitmap $geo
 }
 
+# 像素缓冲（LockBits，与 wxprobe 共用 _wxcommon 实现；原逐像素 GetPixel 一笔约 2s）
+Init-PxBuf $bmp
+
 # ---- 1.5) 礼包弹窗（2026-10-31 用户定版接管自 wxprobe：弹窗一律归 popup，probe 只管场景状态）----
 # 配置在 _wxcommon.ps1 的 $WX_PACK_PROBES（表驱动，新礼包标定后追加一行，勿在此散落坐标）。
 # 采样口径与旧 probe 完全一致：x+=2 / y 逐行，阈值=全分辨率标定值÷2（数值不可与 probe 时代混用）。
-# 必须先于金确定钮判：礼包 ¥30 金钮与挂机「确定」只擦 8px 窄边，若先判金钮可能误分类成 IDLE 并去点确定。
+# 必须先于金确定钮判：礼包金钮与挂机「确定」只擦 8px 窄边，若先判金钮可能误分类成 IDLE 并去点确定。
+# 顺序即优先级：带 Tag 的（金卡，靠底部「今日不再弹出」白字）在前，无 Tag 的（新手礼包）兜底。
 foreach ($pk in $WX_PACK_PROBES) {
-    $nPk = 0
-    for ($y = $pk.Y0; $y -le $pk.Y1; $y++) { for ($x = $pk.X0; $x -le $pk.X1; $x += 2) {
-        if (& $WX_PRED_GOLD $bmp.GetPixel($x, $y)) { $nPk++ }
-    } }
-    if ($nPk -ge $pk.MinHit) {
-        "POPUP=POPUP_PACK kind=$($pk.Kind) pack=$nPk ocr_raw=[] close=$($WX_PACK_CLOSE_X),$($WX_PACK_CLOSE_Y)"
-        exit 0
+    $nPk = Count-PxBox $pk.X0 $pk.Y0 $pk.X1 $pk.Y1 5 2 1
+    if ($nPk -lt $pk.MinHit) { continue }
+    if ($pk.TagMin -gt 0) {
+        $nTag = Count-PxBox $pk.TagX0 $pk.TagY0 $pk.TagX1 $pk.TagY1 3 1 1
+        if ($nTag -lt $pk.TagMin) { continue }
     }
+    "POPUP=POPUP_PACK kind=$($pk.Kind) pack=$nPk ocr_raw=[] close=$($pk.CloseX),$($pk.CloseY) uncheck=$($pk.UncheckX),$($pk.UncheckY)"
+    exit 0
 }
 
 # ---- 2) 金确定钮计数 ----
-$goldBtn = 0
-for ($y = $GOLDY0; $y -le $GOLDY1; $y += 2) { for ($x = $GOLDX0; $x -le $GOLDX1; $x += 2) {
-    $c = $bmp.GetPixel($x, $y)
-    if ($c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R - $c.B) -gt 90) { $goldBtn++ }
-} }
+$goldBtn = Count-PxBox $GOLDX0 $GOLDY0 $GOLDX1 $GOLDY1 1 2 2
 
 # ---- 3) OCR 正文带（有金钮才扫；实时模式把设计位图落临时盘复用 wxocr -Img，避免二次抓屏竞态）----
 $raw = ""

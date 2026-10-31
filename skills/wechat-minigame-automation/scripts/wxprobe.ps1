@@ -81,25 +81,7 @@ $TSX0=848; $TSY0=80;  $TSX1=895; $TSY1=115   # 商城金
 # 改为 LockBits 一次性取整图字节，循环内只做数组索引 + 整数比较；区域/步长/阈值语义一律不变。
 # 用图像自身 PixelFormat 锁位（24bpp=Rgb / 32bpp=Argb 都是 BGR 顺序），避免格式转换引入 ±1 色彩差。
 # 谓词改整数 id：1=金按钮 2=绿字 3=白字 4=暗红战力 5=town金色 6=hp混合（避免每像素构造 Color + 调 scriptblock）
-$script:PxBuf = $null; $script:PxStride = 0; $script:PxBpp = 4
-function Init-PxBuf {
-  $rect = New-Object System.Drawing.Rectangle 0, 0, $bmp.Width, $bmp.Height
-  $bpp = [int]([System.Drawing.Image]::GetPixelFormatSize($bmp.PixelFormat) / 8)
-  $work = $bmp; $disposeWork = $false
-  if ($bpp -lt 3) {
-    $work = New-Object System.Drawing.Bitmap $bmp.Width, $bmp.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $gg = [System.Drawing.Graphics]::FromImage($work)
-    $gg.DrawImage($bmp, 0, 0, $bmp.Width, $bmp.Height); $gg.Dispose()
-    $bpp = 4; $disposeWork = $true
-  }
-  $data = $work.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly, $work.PixelFormat)
-  $script:PxStride = $data.Stride
-  $script:PxBpp = $bpp
-  $script:PxBuf = New-Object byte[] ($data.Stride * $bmp.Height)
-  [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $script:PxBuf, 0, $script:PxBuf.Length)
-  $work.UnlockBits($data)
-  if ($disposeWork) { $work.Dispose() }
-}
+# Init-PxBuf 已移至 _wxcommon.ps1 单源（wxprobe / wxpopup 共用），本脚本仅调用
 function CountPixels([int]$x0,[int]$y0,[int]$x1,[int]$y1,[int]$pred) {
   $buf = $script:PxBuf; $st = $script:PxStride; $bp = $script:PxBpp; $n = 0
   for ($y=$y0; $y -le $y1; $y+=2) {
@@ -132,7 +114,7 @@ function CountPixelsX2([int]$x0,[int]$y0,[int]$x1,[int]$y1,[int]$pred) {
   }
   return $n
 }
-Init-PxBuf
+Init-PxBuf $bmp
 
 # 金色大按钮: R>200 G>140 B<110 R-B>90
 $nGold = CountPixels $RX0 $RY0 $RX1 $RY1 1
