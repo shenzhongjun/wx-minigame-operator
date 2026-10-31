@@ -4,6 +4,27 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.1 --stat`（两版间文件差异）。
 
+## [1.1.19] - 2026-10-31
+
+**主题：弹窗判据全部收敛到 wxpopup（礼包弹窗 POPUP_PACK）+ 最小窗口 800 守卫单源化 + wxrelogin 组合重登链实机验证通过**
+
+### 改动
+- **弹窗归属（用户定版：probe 是状态探针，不应管弹窗）**：`_wxcommon.ps1` 新增表驱动 `$WX_PACK_PROBES`（礼包区域/阈值/金色谓词/红叉坐标），新礼包标定后加一行即可；`wxpopup.ps1` 新增 `POPUP_PACK` 分类（先于金确定钮判，防误分类成 IDLE 后去点确定）；`wxprobe.ps1` 退役 `NEWBIE_PACK` 与 pack 采样，回归纯场景状态。
+- **TOWER_PAGE 补 gold 门控**：删 NEWBIE_PACK 后暴露礼包弹窗压屏被误判成塔页（settle=50 / gold=447）；加 `gold<100` 后礼包图转 UNKNOWN。塔页 4 样本实测 gold=0，余量极大。
+- **最小窗口 800 守卫单源化**：`wxprobe.ps1` 实时路径（此前唯一漏网，窄窗会静默给错 STATE）与 `wxpopup.ps1` 实时路径统一走 `Test-WxMinClientW`（exit 7）；`-Img` 离线路径取消豁免、统一 800（exit 4；wxprobe `-Img` 原本无任何尺寸检查），wxpopup 高度 550 下限保留（拦条带图，防归一化纵向拉伸）。
+- **wxrelogin.ps1**：阶段 1/4 改为「先 popup 再 probe」，礼包命中先关红叉再判场景。
+- **角色卡档案**：coords.md 补第二屏角色映射（5=豁达自在乐逍遥/6=负责的普莱德/7=耀石之达彼特 Lv.18/8=空槽）；7 号槽由「严禁点击」改为可点（(704,370)），8 号槽 (987,370) 仍锁定。
+- **文档治理**：v1.1.18 的「判据设计前置问句」教训段迁出包内（入包外交接文档 §〇）；800 守卫/礼包归属同步 SKILL.md、coords.md、ui-map.md、game-mechanics.md（含用户口述「登录页/选角页不会出现礼包弹窗」）。
+
+### 验证
+- **wxrelogin 组合重登链实机验证通过**（2026-10-31 19:00，角色1）：`EXIT=0 RELOGIN_OK state=TOWN_PAGE`，全程 75s，四阶段全过（GOLD_DIALOG → POPUP_IDLE 点确定 → server OCR 确认登录页 → charsel + wxcharsel 选角 → 三探针 TOWN_PAGE）。
+- 礼包弹窗离线：`POPUP=POPUP_PACK kind=newbie pack=5101`；主城图 `POPUP_NONE`（goldbtn=128，不误报）；probe 遇礼包图转 `UNKNOWN`。
+- 离线回归 20 图：13 PASS / 9 FAIL，9 项均为档案既有记载（s1_battle1、charsel 系列、s1_town/s3_nav1 翻正等），塔页 4/4 PASS 零漂移。
+- 全部改动脚本 BOM + Parser 双校验 0 错误。
+
+### 已知遗留
+- 烟花场景背景 pack 像素高（v1.1.17 实测 7334），若该场景可达会误报 `POPUP_PACK` → 调用方点 (160,192) 空白，不涉钱、无损失。用户 2026-10-31 口述「烟花与礼包不可能同屏，礼包只在登录进入的酒馆弹」，场景可达性待确认。
+
 ## [1.1.18] - 2026-10-31
 
 **主题：NEWBIE_PACK 回退单判据（红叉双判据删除）+ 机制前提入档「礼包仅酒馆场景出现」**
