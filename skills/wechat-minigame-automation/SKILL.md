@@ -87,7 +87,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxgrind.ps1` | **固化刷本循环（主力，实战 39 轮零异常）**：探针验证+轮盘保活+GOLD 连续3次确认；`-AutoRetry` 自动扫描「再来一次」位置免传参 | `-Rounds -AutoRetry -SettleWaitSec` |
 | `wxclick.ps1` | 点击连招：`-Steps "x:y:延迟;w:ms;auto"`；auto/autonow=委托 wxautoensure（OCR，v1.1.12 旧模板 gated 循环退役） | `-Pid2` |
 | `wxprobe.ps1` | 状态探针（战斗/结算/主城三探针/遮挡粗信号；2026-10-31 主城 TOWN_PAGE 三探针恢复；**礼包弹窗已迁出，弹窗一律看 wxpopup**，登录页仍 OCR `server`） | `-Pid2 -Debug` |
-| `wxlogin.ps1` | 固化登录链 v3（2026-10-27 拆分定版：只管登录）：GOLD_DIALOG 先 wxpopup OCR 分类——POPUP_IDLE（挂机）自动点确定重登，其余类别（顶号/涉钱/未知）红线停机；登录页进入游戏→OCR 确认选角页**即止**（角色选择移交 wxcharsel；旧卡表已删，翻页≠选卡教训见 coords.md 角色卡行） | `-AssumeGold` |
+| `wxrelogin.ps1` | **组合重登链（登录链唯一入口，`wxlogin` 已于 2026-10-31 退役并入本脚本）**：礼包弹窗先清场 → GOLD_DIALOG 经 wxpopup 分类（POPUP_IDLE 挂机自动点确定，其余顶号/涉钱/未知红线停机）→ server OCR 轮询登录页 → 进游戏 → 委托 wxcharsel 选角 → 三探针确认主城；已站主城直接返回 `ALREADY_TOWN`（不白等）。登录/选角阶段不弹礼包 | `-Char N -TownTimeoutSec -AssumeGold -Perf` |
 | `wxcharsel.ps1` | **选角专职（2026-10-27 新增，卡表单源）**：起始态自适应进选角页（主城点「选角」带3次重试）→ scr1w/scr2w 判屏 → 按需切屏复核 → 幂等双击目标卡；`-StartGame` 进游戏+town 终态确认，默认停选角页。卡表坐标见 coords.md「角色卡」行（脚本内单源）；**7/8 锁槽红线禁点** | `-Char 1..6 -StartGame` |
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |

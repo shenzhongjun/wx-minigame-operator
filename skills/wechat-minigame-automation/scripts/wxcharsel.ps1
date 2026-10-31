@@ -1,5 +1,5 @@
 ﻿param([int]$Char = 0, [int]$Pid2 = 0, [switch]$StartGame)
-# 选角专职脚本（2026-10-27 用户定版拆分：登录链归 wxlogin，选角归 wxcharsel，卡表单源在此）
+# 选角专职脚本（2026-10-27 用户定版拆分：登录链归 wxrelogin，选角归 wxcharsel，卡表单源在此）
 # 流程：状态守卫 → 起始态自适应进选角页（主城点「选角」/已在选角页直进，其余 STOP）
 #       → scr1w/scr2w 判屏 → 按需切屏 (139,536)/(138,180) 复核 → 幂等双击目标卡
 #       → -StartGame 时点开始游戏(1018,634) 并 town OCR 终态确认；默认停在选角页
@@ -57,7 +57,7 @@ $st = "ERR"
 foreach ($line in $probe) { if ("$line" -match '^STATE=(\w+)') { $st = $Matches[1]; break } }
 "start state=$st"
 if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
-if ($st -eq "GOLD_DIALOG") { "STOP: GOLD_DIALOG 弹窗在场，先走 wxlogin.ps1 处理（弹窗分类红线在登录链）"; exit 9 }
+if ($st -eq "GOLD_DIALOG") { "STOP: GOLD_DIALOG 弹窗在场，先走 wxrelogin.ps1 处理（弹窗分类红线在重登链）"; exit 9 }
 if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) { "STOP: 已在游戏内(state=$st)，选角链不适用"; exit 9 }
 
 # ---- 进选角页（起始态自适应）----
@@ -65,7 +65,7 @@ if (-not (Test-OcrTask "charsel")) {
     if (Test-OcrTask "town") {
         if (-not (Enter-Charsel)) { "STOP: 点选角 3 次未确认（charsel OCR 未命中），截图人工核对"; exit 9 }
     } else {
-        "STOP: 不在主城也不在选角页(state=$st)，先 wxlogin 或人工核对"; exit 9
+        "STOP: 不在主城也不在选角页(state=$st)，先 wxrelogin 或人工核对"; exit 9
     }
 }
 "charsel confirmed"
