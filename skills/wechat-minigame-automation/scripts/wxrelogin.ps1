@@ -7,16 +7,17 @@
 # 复用单源：wxprobe/wxpopup/wxocr/wxclick/wxcharsel 均子进程调用，本脚本零像素逻辑零坐标卡表
 #       （唯一自有动作=红叉 (160,192)，与 coords.md「新手礼包弹窗」行一致；礼包判据 2026-10-31 起来自
 #        wxpopup POPUP_PACK，probe 不再判弹窗。本脚本无 dot-source，红叉坐标硬编码与档案同源。）
-# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxrelogin.ps1 [-Pid2 N] [-Char 1] [-TownTimeoutSec 90] [-AssumeGold]
+# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxrelogin.ps1 [-Pid2 N] [-Char 1] [-TownTimeoutSec 90] [-AssumeGold] [-Perf]
 # 退出码：0=RELOGIN_OK（TOWN_PAGE 三探针确认）；9=STOP（红线/超时/异常，人工核对）。
-param([int]$Pid2 = 0, [int]$Char = 1, [int]$TownTimeoutSec = 90, [switch]$AssumeGold)
+# -Perf：输出分段计时（t=Ns）与子进程汇总（perf: ...），用于性能复测；默认关，不影响任何逻辑与耗时。
+param([int]$Pid2 = 0, [int]$Char = 1, [int]$TownTimeoutSec = 90, [switch]$AssumeGold, [switch]$Perf)
 $ErrorActionPreference = 'Stop'
 $scripts = $PSScriptRoot
 $ps = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
-# 分段计时（2026-10-31 性能体检，纯输出不影响逻辑，可整段删）
+# 分段计时（2026-10-31 性能体检落地，2026-10-31 晚改 -Perf 开关控制输出）
 $T0 = Get-Date
 $SubMs = 0; $SubN = 0
-function Now-S { [int]((Get-Date) - $T0).TotalSeconds }
+function TS { if ($Perf) { return " t=$([int]((Get-Date) - $T0).TotalSeconds)s" } return "" }
 
 function Invoke-Sub([string]$script, [string[]]$argList) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -50,7 +51,7 @@ function Invoke-Click([string]$steps) {
 
 # ---- 阶段1：金弹窗处理（红线分类）----
 $st = Get-State
-"phase1 start state=$st t=$(Now-S)s"
+"phase1 start state=$st$(TS)"
 if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
 # 弹窗优先（2026-10-31 定版：弹窗一律归 wxpopup 判）。礼包弹窗压屏时 probe 只能报 UNKNOWN，
 # 必须先关掉再判场景——否则后面 server/charsel OCR 全被弹窗挡住，白等 50 秒才失败。
@@ -65,7 +66,7 @@ if ($pi.Cls -eq "POPUP_PACK") {
 }
 if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) { "STOP: state=$st 已在游戏内，重登链不适用"; exit 9 }
 if ($st -eq "GOLD_DIALOG") {
-    "phase1 popup=$($pi.Cls) t=$(Now-S)s"
+    "phase1 popup=$($pi.Cls)$(TS)"
     if ($pi.Cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
         "STOP: GOLD_DIALOG 分类=$($pi.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
     }
@@ -81,11 +82,11 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 2
 }
 if ($loginHit) {
-    "phase2 login page confirmed (server OCR) t=$(Now-S)s"
+    "phase2 login page confirmed (server OCR)$(TS)"
     Invoke-Click "571:527:5000"
-    "phase2 enter-game clicked t=$(Now-S)s"
+    "phase2 enter-game clicked$(TS)"
 } else {
-    "phase2: 30s 未见登录页（可能已在选角页/加载中），继续按后续阶段判定 t=$(Now-S)s"
+    "phase2: 30s 未见登录页（可能已在选角页/加载中），继续按后续阶段判定$(TS)"
 }
 
 # ---- 阶段3：选角（OCR 确认后委托 wxcharsel 幂等链）----
@@ -96,11 +97,11 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 2
 }
 if (-not $charselHit) { "STOP: 20s 内未确认选角页（「选择角色」标题未命中），截图人工核对"; exit 9 }
-"phase3 charsel confirmed -> wxcharsel char$Char startgame t=$(Now-S)s"
+"phase3 charsel confirmed -> wxcharsel char$Char startgame$(TS)"
 $chOut = Invoke-Sub 'wxcharsel.ps1' @('-Char', $Char, '-StartGame', '-Pid2', $Pid2)
 $chOut | ForEach-Object { "charsel| $_" }
 $chExit = $LASTEXITCODE
-"phase3 wxcharsel done t=$(Now-S)s exit=$chExit"
+"phase3 wxcharsel done$(TS) exit=$chExit"
 if ($chExit -ne 0) { "STOP: wxcharsel exit=$chExit"; exit 9 }
 
 # ---- 阶段4：终态轮询（礼包弹窗关闭 / TOWN_PAGE 成功）----
@@ -110,12 +111,12 @@ $packClosed = 0; $idleReclicked = 0
 $deadline = (Get-Date).AddSeconds($TownTimeoutSec)
 while ((Get-Date) -lt $deadline) {
     $st = Get-State
-    if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed t=$(Now-S)s"; "perf: subprocess=$SubN calls / $([int]($SubMs/1000))s"; exit 0 }
+    if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed$(TS)"; if ($Perf) { "perf: subprocess=$SubN calls / $([int]($SubMs/1000))s" }; exit 0 }
     $pi = Get-PopupInfo
     if ($pi.Cls -eq "POPUP_PACK") {
         if ($packClosed -ge 3) { "STOP: 礼包弹窗红叉已点 3 次仍未清除，截图人工核对"; exit 9 }
         $packClosed++
-        "phase4 POPUP_PACK -> uncheck/close attempt=$packClosed t=$(Now-S)s"
+        "phase4 POPUP_PACK -> uncheck/close attempt=$packClosed$(TS)"
         if ($pi.UncheckX -gt 0) { Invoke-Click "$($pi.UncheckX):$($pi.UncheckY):900" }
         Invoke-Click "$($pi.CloseX):$($pi.CloseY):2500"
         continue

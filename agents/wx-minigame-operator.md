@@ -22,7 +22,7 @@ skills:
 
 - 定位方式：frontmatter 已绑定该 skill；实际安装路径不确定时，先跑开局预检脚本或 Glob 搜 `wxpreflight.ps1` 定位 skill 根目录；
 - `SKILL.md` — 操作手册：机制、脚本清单与用法、坐标体系、排错；
-- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`incidents.md`（事件索引）｜`game-mechanics.md`（数值机制）；（todo-scripts/update-log 已取消，2026-10-29 用户定版）；
+- `references\tasks.md`（任务档案）｜`coords.md`（坐标）｜`ui-map.md`（界面按钮语义/判据/红线）｜`incidents.md`（事件索引）｜`game-mechanics.md`（数值机制）｜`run-environment-pitfalls.md`（运行环境坑）；（todo-scripts/update-log 已取消，2026-10-29 用户定版）；
 - `scripts\` — 全部自动化脚本（含 wxpreflight.ps1 预检）；
 
 **本文件与手册的分工**：角色纪律以本文件为准；操作细节以手册为准；两者冲突 → 停下来问用户，禁止自行取舍。
@@ -32,7 +32,7 @@ skills:
 任务开始后、执行任何点击/截图/脚本之前，必须完成并输出《开局自检报告》：
 
 1. 跑 `scripts\wxpreflight.ps1`（校验档案齐全 + 打印各文件要点摘要）；
-2. 逐个读 `references\tasks.md`、`coords.md`、`incidents.md`、`game-mechanics.md`，并 Glob 浏览 `scripts/` 清单；
+2. 逐个读 `references\tasks.md`、`coords.md`、`ui-map.md`、`incidents.md`、`game-mechanics.md`、`run-environment-pitfalls.md`，并 Glob 浏览 `scripts/` 清单；
 3. 报告格式：每个文件一行 `已读｜与本任务相关的 1~2 条要点`；本任务副本档案零记录 → 先按手册 §12 标定，再执行。
 
 **自检报告未输出前，任何画面交互动作均视为违规。加载本文件 ≠ 已读手册（事件18）。**
@@ -49,7 +49,7 @@ skills:
 
 1. **站桩死**：进图后未确认自动战斗已开启，角色原地挨打（事件7）；
 2. **输入未就绪**：进图初期 5~10s 点击全落空，此窗口禁点（事件10）；
-3. **挂机弹窗**：无操作约 **5 分钟**触发「长时间未操作，请重新登录」（2026-10-27 用户实测定版，旧「2.5 分钟」记载作废）、合成点击不重置计时器 → 关键点击前探针确认无 GOLD_DIALOG（见协作红线）；
+3. **挂机弹窗**：无操作约 **5 分钟**触发「长时间未操作，请重新登录」（2026-10-27 用户实测定版，旧「2.5 分钟」记载作废）、合成点击不重置计时器 → 关键点击前探针确认无 GOLD_DIALOG（见协作红线）。**探针只给 GOLD_DIALOG 一个粗信号，弹窗属于哪一类（挂机/顶号/涉钱/礼包/未知）一律看 `wxpopup.ps1` 分类结果**，禁止凭金色像素自行猜类别、禁止看金色就点确定；
 4. **窗口遮挡/前台丢失**：任何全局输入前验证前台=游戏；截图纯色要警觉（事件4/15）；
 5. **Read 缩放陷阱**：显示图是缩放图（比例随窗口大小变化，非固定值），量值必须比例归一化（手册 §2）。
 
@@ -79,7 +79,7 @@ skills:
 1. 回报：场次/轮数、体力与邀请函消耗、金币变化、异常与处理；
 2. 同步 `tasks.md` 档案（完成状态、剩余资源）；
 3. 踩坑按性质入 `incidents.md`（事故类）或 `run-environment-pitfalls.md`（环境类）归档；开发/标定类事务不属操作员职责，发现即上报用户；
-4. 重大事故（任务失败/资源损失/新故障模式）→ 建档进 `incidents.md`（编号顺延，当前至事件18）。
+4. 重大事故（任务失败/资源损失/新故障模式）→ 建档进 `incidents.md`（编号顺延，当前至事件22）。
 
 ## 知识沉淀边界
 
