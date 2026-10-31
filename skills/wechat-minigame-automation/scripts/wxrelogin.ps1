@@ -17,7 +17,7 @@ $scripts = $PSScriptRoot
 $ps = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 # 分段计时（2026-10-31 性能体检落地，2026-10-31 晚改 -Perf 开关控制输出）
 $T0 = Get-Date
-$SubMs = 0; $SubN = 0
+$SubMs = 0; $SubN = 0; $CallN = 0
 function TS { if ($Perf) { return " t=$([int]((Get-Date) - $T0).TotalSeconds)s" } return "" }
 # 模块化试点（2026-10-31）：probe/popup 同进程调用，省掉每次 0.5~0.9s 的进程启动。
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
@@ -26,14 +26,14 @@ function TS { if ($Perf) { return " t=$([int]((Get-Date) - $T0).TotalSeconds)s" 
 function Invoke-Sub([string]$script, [string[]]$argList) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $r = & $ps -NoProfile -ExecutionPolicy Bypass -File "$scripts\$script" @argList 2>&1 | ForEach-Object { "$_" }
-    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++
+    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++; $script:CallN++
     $r
 }
 function Get-State {
     # 同进程调用（原为 wxprobe.ps1 子进程 + 正则解析 STATE 行）。异常与探测错误统一回 ERR，语义同旧版。
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    try { $r = Invoke-WxProbe -Pid2 $Pid2 } catch { $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++; return "ERR" }
-    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++
+    try { $r = Invoke-WxProbe -Pid2 $Pid2 } catch { $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:CallN++; return "ERR" }
+    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:CallN++
     if ($r.Err) { return "ERR" }
     return $r.State
 }
@@ -46,8 +46,8 @@ function Get-PopupInfo {
     # 同进程调用 Invoke-WxPopup（原为 wxpopup.ps1 子进程 + 正则解析）。出错时保持旧默认值 POPUP_UNKNOWN → 走红线停机。
     $i = @{ Cls = 'POPUP_UNKNOWN'; CloseX = 0; CloseY = 0; UncheckX = 0; UncheckY = 0 }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    try { $r = Invoke-WxPopup -Pid2 $Pid2 } catch { $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++; return $i }
-    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++
+    try { $r = Invoke-WxPopup -Pid2 $Pid2 } catch { $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:CallN++; return $i }
+    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:CallN++
     if ($r.Err) { return $i }
     $i.Cls = $r.Popup; $i.CloseX = [int]$r.CloseX; $i.CloseY = [int]$r.CloseY
     $i.UncheckX = [int]$r.UncheckX; $i.UncheckY = [int]$r.UncheckY
@@ -80,7 +80,7 @@ if ($st -eq "GOLD_DIALOG") {
         "STOP: GOLD_DIALOG 分类=$($pi.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
     }
     Invoke-Click "700:513:4000"
-    "phase1 idle-confirm clicked"
+    "phase1 confirm clicked cls=$($pi.Cls)$(if ($AssumeGold) { ' (AssumeGold)' } else { '' })"
 }
 
 # ---- 阶段2：server OCR 轮询等登录页 → 点进入游戏 ----
@@ -120,7 +120,7 @@ $packClosed = 0; $idleReclicked = 0
 $deadline = (Get-Date).AddSeconds($TownTimeoutSec)
 while ((Get-Date) -lt $deadline) {
     $st = Get-State
-    if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed$(TS)"; if ($Perf) { "perf: subprocess=$SubN calls / $([int]($SubMs/1000))s" }; exit 0 }
+    if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed$(TS)"; if ($Perf) { "perf: calls=$CallN (subproc=$SubN) module_ms=$SubMs" }; exit 0 }
     $pi = Get-PopupInfo
     if ($pi.Cls -eq "POPUP_PACK") {
         if ($packClosed -ge 3) { "STOP: 礼包弹窗红叉已点 3 次仍未清除，截图人工核对"; exit 9 }
