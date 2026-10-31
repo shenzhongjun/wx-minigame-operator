@@ -28,6 +28,11 @@
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
+    # 离线图守卫（2026-10-31 用户定版：-Img 不再豁免小窗线，与实时路径统一走 800 公共守卫）
+    $iw = $bmp.Width; $ih = $bmp.Height
+    if (-not (Test-WxMinClientW $iw)) {
+        $bmp.Dispose(); "ERR: image ${iw}x${ih} 过小（宽须>=$($WX_MIN_CLIENT_W)），-Img 需传完整客户端区截图"; exit 4
+    }
     if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
         $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
         if (-not [object]::ReferenceEquals($norm, $bmp)) { $bmp.Dispose() }

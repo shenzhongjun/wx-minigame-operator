@@ -25,10 +25,12 @@ $BX0 = 350; $BY0 = 348; $BX1 = 800; $BY1 = 408               # 正文带（容�
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
-    # 注（2026-10-31）：此处是离线图下限（exit 4），与实时路径的 Test-WxMinClientW(800) 语义不同——
-    # 离线 -Img 只做标定/回归，不受小窗守卫限制（pitfalls「-Img 离线路径不受限」定版），勿合并两处。
-    if ($bmp.Width -lt 800 -or $bmp.Height -lt 550) {
-        $bmp.Dispose(); "ERR: image $($bmp.Width)x$($bmp.Height) 过小，-Img 需传完整客户端区截图"; exit 4
+    # 离线图下限（2026-10-31 用户定版：-Img 不再豁免小窗线，与实时路径统一走 800 公共守卫——
+    # 以后不跑小于 800 的窗口，故 <800 一律视为不合规输入。exit 4 保持「输入错误」语义）。
+    # 高度 550 另留：拦条带图，防被归一化到 1138x708 后纵向拉伸致判据全错（与宽度守卫目的不同）。
+    $iw = $bmp.Width; $ih = $bmp.Height
+    if (-not (Test-WxMinClientW $iw) -or $ih -lt 550) {
+        $bmp.Dispose(); "ERR: image ${iw}x${ih} 过小（宽须>=$($WX_MIN_CLIENT_W)、高须>=550），-Img 需传完整客户端区截图"; exit 4
     }
     if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
         $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
