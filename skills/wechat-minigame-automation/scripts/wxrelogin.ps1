@@ -4,9 +4,10 @@
 #       TOWN_PAGE(三探针, v1.1.17) 即成功。B1(town OCR 背景 MISS) 已由三探针根治，本链终态=三探针权威。
 # 红线（沿用 wxlogin v1.1.6 固化）：GOLD_DIALOG 先 wxpopup OCR 分类——POPUP_IDLE→自动点确定；
 #       其余（顶号/涉钱/未知）停机 exit 9，绝不自动点。-AssumeGold=人工强制放行（透传）。
-# 复用单源：wxprobe/wxpopup/wxocr/wxclick/wxcharsel 均子进程调用，本脚本零像素逻辑零坐标卡表
-#       （唯一自有动作=红叉 (160,192)，与 coords.md「新手礼包弹窗」行一致；礼包判据 2026-10-31 起来自
-#        wxpopup POPUP_PACK，probe 不再判弹窗。本脚本无 dot-source，红叉坐标硬编码与档案同源。）
+# 复用单源：**wxprobe / wxpopup 自 2026-10-31 起同进程调用**（dot-source _wxcore.ps1 的 Invoke-WxProbe /
+#       Invoke-WxPopup，不再起子进程，模块化试点）；wxocr / wxclick / wxcharsel 仍走子进程。
+#       本脚本零像素逻辑零坐标卡表（唯一自有动作=红叉 (160,192)，与 coords.md「新手礼包弹窗」行一致；
+#       礼包判据 2026-10-31 起来自 wxpopup POPUP_PACK，probe 不再判弹窗）。
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxrelogin.ps1 [-Pid2 N] [-Char 1] [-TownTimeoutSec 90] [-AssumeGold] [-Perf]
 # 退出码：0=RELOGIN_OK（三探针确认到主城）｜ALREADY_TOWN（本来就在主城，未执行任何点击）；9=STOP（红线/超时/异常，人工核对）。
 # -Perf：输出分段计时（t=Ns）与子进程汇总（perf: ...），用于性能复测；默认关，不影响任何逻辑与耗时。
@@ -18,6 +19,9 @@ $ps = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 $T0 = Get-Date
 $SubMs = 0; $SubN = 0
 function TS { if ($Perf) { return " t=$([int]((Get-Date) - $T0).TotalSeconds)s" } return "" }
+# 模块化试点（2026-10-31）：probe/popup 同进程调用，省掉每次 0.5~0.9s 的进程启动。
+. (Join-Path $PSScriptRoot '_wxcommon.ps1')
+. (Join-Path $PSScriptRoot '_wxcore.ps1')
 
 function Invoke-Sub([string]$script, [string[]]$argList) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -26,9 +30,12 @@ function Invoke-Sub([string]$script, [string[]]$argList) {
     $r
 }
 function Get-State {
-    $out = Invoke-Sub 'wxprobe.ps1' @('-Pid2', $Pid2)
-    foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { return $Matches[1] } }
-    return "ERR"
+    # 同进程调用（原为 wxprobe.ps1 子进程 + 正则解析 STATE 行）。异常与探测错误统一回 ERR，语义同旧版。
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try { $r = Invoke-WxProbe -Pid2 $Pid2 } catch { $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++; return "ERR" }
+    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++
+    if ($r.Err) { return "ERR" }
+    return $r.State
 }
 function Test-OcrTask([string]$task) {
     $out = Invoke-Sub 'wxocr.ps1' @('-Pid2', $Pid2, '-Task', $task)
@@ -36,13 +43,14 @@ function Test-OcrTask([string]$task) {
     return ($joined -match "OCR=$task=HIT")
 }
 function Get-PopupInfo {
-    $out = Invoke-Sub 'wxpopup.ps1' @('-Pid2', $Pid2)
+    # 同进程调用 Invoke-WxPopup（原为 wxpopup.ps1 子进程 + 正则解析）。出错时保持旧默认值 POPUP_UNKNOWN → 走红线停机。
     $i = @{ Cls = 'POPUP_UNKNOWN'; CloseX = 0; CloseY = 0; UncheckX = 0; UncheckY = 0 }
-    foreach ($line in $out) {
-        if ("$line" -match 'POPUP=(POPUP_\w+)') { $i.Cls = $Matches[1] }
-        if ("$line" -match 'close=(\d+),(\d+)') { $i.CloseX = [int]$Matches[1]; $i.CloseY = [int]$Matches[2] }
-        if ("$line" -match 'uncheck=(\d+),(\d+)') { $i.UncheckX = [int]$Matches[1]; $i.UncheckY = [int]$Matches[2] }
-    }
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try { $r = Invoke-WxPopup -Pid2 $Pid2 } catch { $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++; return $i }
+    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++
+    if ($r.Err) { return $i }
+    $i.Cls = $r.Popup; $i.CloseX = [int]$r.CloseX; $i.CloseY = [int]$r.CloseY
+    $i.UncheckX = [int]$r.UncheckX; $i.UncheckY = [int]$r.UncheckY
     return $i
 }
 function Invoke-Click([string]$steps) {

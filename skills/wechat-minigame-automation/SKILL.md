@@ -93,6 +93,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocr autobtn 任务 OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
 | `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
+| `_wxcore.ps1` | **同进程模块库（2026-10-31 模块化试点）**：`Invoke-WxProbe`（状态探针）/ `Invoke-WxPopup`（弹窗分类）的函数本体，只返回对象不打印文本。链路 dot-source 它之后直接调函数，**不再起子进程**；`wxprobe.ps1` / `wxpopup.ps1` 已降为薄壳（解析参数→调函数→按原格式打印→退出码）。接口契约见 `管理新规.md` §七；区域/阈值/判定顺序与原脚本逐字一致，迁移前后 8+8 张图离线对比零漂移 | 改动须与 wxprobe/wxpopup 薄壳同步核对 |
 | `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对标注截图库（`-ImgDir` 传入）断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
