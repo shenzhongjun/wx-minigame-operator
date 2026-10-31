@@ -8,7 +8,7 @@
 #       （唯一自有动作=红叉 (160,192)，与 coords.md「新手礼包弹窗」行一致；礼包判据 2026-10-31 起来自
 #        wxpopup POPUP_PACK，probe 不再判弹窗。本脚本无 dot-source，红叉坐标硬编码与档案同源。）
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File wxrelogin.ps1 [-Pid2 N] [-Char 1] [-TownTimeoutSec 90] [-AssumeGold] [-Perf]
-# 退出码：0=RELOGIN_OK（TOWN_PAGE 三探针确认）；9=STOP（红线/超时/异常，人工核对）。
+# 退出码：0=RELOGIN_OK（三探针确认到主城）｜ALREADY_TOWN（本来就在主城，未执行任何点击）；9=STOP（红线/超时/异常，人工核对）。
 # -Perf：输出分段计时（t=Ns）与子进程汇总（perf: ...），用于性能复测；默认关，不影响任何逻辑与耗时。
 param([int]$Pid2 = 0, [int]$Char = 1, [int]$TownTimeoutSec = 90, [switch]$AssumeGold, [switch]$Perf)
 $ErrorActionPreference = 'Stop'
@@ -64,6 +64,7 @@ if ($pi.Cls -eq "POPUP_PACK") {
     $pi = Get-PopupInfo
     "phase1 after close state=$st popup=$($pi.Cls)"
 }
+if ($st -eq "TOWN_PAGE") { "ALREADY_TOWN: 已在主城，重登链不适用（未执行任何点击）"; exit 0 }
 if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) { "STOP: state=$st 已在游戏内，重登链不适用"; exit 9 }
 if ($st -eq "GOLD_DIALOG") {
     "phase1 popup=$($pi.Cls)$(TS)"
