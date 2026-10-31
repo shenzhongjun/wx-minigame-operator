@@ -25,6 +25,8 @@ $BX0 = 350; $BY0 = 348; $BX1 = 800; $BY1 = 408               # 正文带（容�
 if ($Img -ne "") {
     if (-not (Test-Path $Img)) { "ERR: image not found: $Img"; exit 4 }
     $bmp = New-Object System.Drawing.Bitmap $Img
+    # 注（2026-10-31）：此处是离线图下限（exit 4），与实时路径的 Test-WxMinClientW(800) 语义不同——
+    # 离线 -Img 只做标定/回归，不受小窗守卫限制（pitfalls「-Img 离线路径不受限」定版），勿合并两处。
     if ($bmp.Width -lt 800 -or $bmp.Height -lt 550) {
         $bmp.Dispose(); "ERR: image $($bmp.Width)x$($bmp.Height) 过小，-Img 需传完整客户端区截图"; exit 4
     }
@@ -37,6 +39,8 @@ if ($Img -ne "") {
     $h = Find-GameWindow -Pid2 $Pid2
     if ($h -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     $geo = Get-ClientGeometry $h
+    # 最小窗口守卫（2026-10-31 单源化：此前实时路径自带 800 字面量散落各处，现统一走公共函数）
+    if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H) < ${WX_MIN_CLIENT_W} width)，弹窗分类拒读"; exit 7 }
     $bmp = Get-DesignBitmap $geo
 }
 

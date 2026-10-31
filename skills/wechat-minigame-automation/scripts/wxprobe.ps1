@@ -39,6 +39,9 @@ if ($Img -ne "") {
     # 前台守卫（todo 第3项，2026-10-27 接线）：不在前台先拉回，防读到旧画面假数据
     if (-not (Confirm-WxForeground $h 'probe')) { "ERR: game not foreground，探测拒绝（防假数据）"; exit 7 }
     $geo = Get-ClientGeometry $h
+    # 最小窗口守卫（2026-10-31 补齐单源，此前 probe 是唯一漏网的实时路径）：
+    # 窄条窗归一化后像素仍会给出「看似正常」的 STATE，属静默错判，比报错更危险 → 拒绝探测。
+    if (-not (Test-WxMinClientW $geo.W)) { "ERR: window too small ($($geo.W)x$($geo.H) < ${WX_MIN_CLIENT_W} width)，探测拒读"; exit 7 }
     "client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY) scale=$([math]::Round($geo.S,4))"
     $bmp = Get-DesignBitmap $geo
     # 遮挡守卫（事件4/15）：网格采样色彩多样性，整屏纯色=最小化/遮挡/锁屏，像素不可信 → 报 OCCLUDED
