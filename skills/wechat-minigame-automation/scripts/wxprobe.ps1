@@ -66,8 +66,7 @@ $NX0=30; $NY0=130; $NX1=160; $NY1=520
 $TPX0=230; $TPY0=132; $TPX1=370; $TPY1=172   # 战力条暗红
 $TWX0=658; $TWY0=60;  $TWX1=735; $TWY1=155   # 福利暗金
 $TSX0=848; $TSY0=80;  $TSX1=895; $TSY1=115   # 商城金
-$PKX0=529; $PKY0=520; $PKX1=763; $PKY1=603   # 礼包 ¥30 金钮
-$XX0=152;  $XY0=184;  $XX1=168;  $XY1=200    # 礼包关闭红叉（¥30 单判据会被烟花背景金色爆炸击穿，必须红叉双条件）
+$PKX0=529; $PKY0=520; $PKX1=763; $PKY1=603   # 礼包 ¥30 金钮（弹窗仅酒馆场景出现，用户 2026-10-31 口述；酒馆背景 pack 实测 580）
 
 function CountPixels([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
   $n = 0
@@ -126,15 +125,6 @@ $nShop  = CountPixelsX2 $TSX0 $TSY0 $TSX1 $TSY1 $predTownGold
 $nPack  = CountPixelsX2 $PKX0 $PKY0 $PKX1 $PKY1 $predTownGold
 # 阈值（全分辨率标定÷2）：power 300→150 / welfare 100→50 / shop 60→30 / pack 3000→1500
 $townVotes = ($nPower -ge 150) + ($nTownW -ge 50) + ($nShop -ge 30)
-# 红叉区全分辨率计数（逐像素，区小 17x17=289px 成本可忽略）：实测真弹窗 102 / 主城四背景(含烟花) 全 0 / 副本页 ~36，阈值 40
-function CountPixelsFull([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
-  $n = 0
-  for ($y=$y0; $y -le $y1; $y++) { for ($x=$x0; $x -le $x1; $x++) {
-    if (& $pred $bmp.GetPixel($x,$y)) { $n++ }
-  }}
-  return $n
-}
-$nRedX = CountPixelsFull $XX0 $XY0 $XX1 $XY1 { param($c) $c.R -ge 140 -and ($c.R-$c.G) -ge 60 -and ($c.R-$c.B) -ge 60 }
 
 # 左上角按钮文字模板匹配（AUTO_ON/AUTO_OFF 判定唯一来源；区域/模板由 _wxcommon 单源提供）
 $tpl = Import-WxBtnTemplates
@@ -158,8 +148,8 @@ $state = "UNKNOWN"
 #  SETTLE_PAGE 加 btnMatch 门控：毁灭之塔红月背景 settle=16-22 但无按钮（dist=1），真结算面板按钮可见
 #  NEWBIE_PACK 必须最先判（v1.1.17）：¥30 金钮区与 GOLD_DIALOG 判定区重叠，晚判会误报挂机弹窗
 #    → 点 (700,513) 擦到 ¥30 金钮（涉钱红线）；挂机「确定」只与礼包区擦 8px 窄边，pack 读数最多 ~1000，撞不到 1500
-#    ⚠️ 双条件（¥30 金钮 + 红叉）：烟花背景金色爆炸可把 pack 区打到 14618（超真弹窗 10206），红叉区实测主城全 0/弹窗 102
-if     ($nPack -ge 1500 -and $nRedX -ge 40)                            { $state = "NEWBIE_PACK" } # ¥30 金钮(实测5101)+红叉(实测102) 双判据
+#    单判据即安全：礼包弹窗仅酒馆场景出现（用户 2026-10-31 口述），酒馆背景 pack 实测 580，余量 2.6 倍
+if     ($nPack -ge 1500)                                               { $state = "NEWBIE_PACK" } # 礼包 ¥30 金钮（弹窗实测 ~5100，酒馆背景 580）
 elseif (-not $btnMatch -and $nGold -ge 450)                            { $state = "GOLD_DIALOG" } # 金确定钮弹窗（挂机/顶号/死亡，gold≈1066；用 wxpopup 细分）
 elseif ($nSettle -ge 10 -and $btnMatch)                                { $state = "SETTLE_PAGE" } # 真结算：面板按钮可见（战斗中红怪入带误报仍不可修，见档案）
 elseif ($nSettle -ge 10)                                               { $state = "TOWER_PAGE" }  # 塔页红月：settle 命中但无按钮
@@ -182,4 +172,4 @@ $page = switch -regex ($state) {
     }
 }
 "PAGE=$page"
-if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp power=$nPower welfare=$nTownW shop=$nShop pack=$nPack redx=$nRedX townvotes=$townVotes" }
+if ($Debug) { "debug: gold=$nGold stamina=$nStam settle=$nSettle side=$nSide dist_on=$dOn dist_off=$dOff hp=$nHp power=$nPower welfare=$nTownW shop=$nShop pack=$nPack townvotes=$townVotes" }
