@@ -23,7 +23,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `references/features/daily-claim.md` | 每日领体力流程 |
 | `references/game-mechanics.md` | 游戏数值与机制（体力/邀请函/钻石/免费首把；每日标准循环看 tasks.md；角色分工看 tasks.md） |
 | `references/incidents.md` | 事件根因档案（索引版，事件1-22） |
-| `references/run-environment-pitfalls.md` | **运行环境坑全集**（执行方式/编码语法/输出捕获/桌面窗口/成本纪律；拉子进程必带 `-WindowStyle Hidden`） |
+| `references/run-environment-pitfalls.md` | **运行环境坑全集**（执行方式/编码语法/输出捕获/桌面窗口；拉子进程必带 `-WindowStyle Hidden`） |
 | `scripts/` `assets/` | 全部自动化脚本；自动战斗模板图 |
 | 专家包 `wx-minigame-operator` | 角色纪律：开局协议/致命五坑/熔断/红线/收尾 |
 
