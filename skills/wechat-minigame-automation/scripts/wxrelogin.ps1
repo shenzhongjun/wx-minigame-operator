@@ -111,7 +111,9 @@ while ((Get-Date) -lt $deadline) {
 }
 if (-not $charselHit) { "STOP: 20s 内未确认选角页（「选择角色」标题未命中），截图人工核对"; exit 9 }
 "phase3 charsel confirmed -> wxcharsel char$Char startgame$(TS)"
-$chOut = Invoke-Sub 'wxcharsel.ps1' @('-Char', $Char, '-StartGame', '-Pid2', $Pid2)
+$chArgs = @('-Char', $Char, '-StartGame', '-Pid2', $Pid2, '-SkipGuard')
+if ($Perf) { $chArgs += '-Perf' }
+$chOut = Invoke-Sub 'wxcharsel.ps1' $chArgs
 $chOut | ForEach-Object { "charsel| $_" }
 $chExit = $LASTEXITCODE
 "phase3 wxcharsel done$(TS) exit=$chExit"
