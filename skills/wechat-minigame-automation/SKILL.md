@@ -93,11 +93,11 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocr autobtn 任务 OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
 | `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
-| `_wxcore.ps1` | **同进程模块库（2026-10-31 模块化试点）**：`Invoke-WxProbe`（状态探针）/ `Invoke-WxPopup`（弹窗分类）的函数本体，只返回对象不打印文本。链路 dot-source 它之后直接调函数，**不再起子进程**；`wxprobe.ps1` / `wxpopup.ps1` 已降为薄壳（解析参数→调函数→按原格式打印→退出码）。接口契约见 `管理新规.md` §七；区域/阈值/判定顺序与原脚本逐字一致，迁移前后 8+8 张图离线对比零漂移 | 改动须与 wxprobe/wxpopup 薄壳同步核对 |
+| `_wxcore.ps1` | **同进程模块库（2026-10-31 模块化）**：`Invoke-WxProbe`（状态探针）/ `Invoke-WxPopup`（弹窗分类）/ `Invoke-WxOcr`（OCR）/ `Invoke-WxClick`（点击）的函数本体，只返回对象不打印文本。链路 dot-source 后直接调函数，**不再起子进程**；`wxprobe/wxpopup/wxocr/wxclick` 四个 .ps1 已降为薄壳。**⚠️ OCR 引擎在进程内缓存，是全项目最大性能点：单次 3s→0.25s**（原实现每次子进程都重建 OcrEngine 加载中文模型约 2s；注释里的「250ms」只是识别本身）。接口契约见 `管理新规.md` §七；区域/阈值/判定顺序/Steps 语法与原脚本逐字一致，迁移前后离线逐图对比零漂移 | 改任一函数须同步核对对应薄壳 |
 | `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对标注截图库（`-ImgDir` 传入）断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
-| `wxpopup.ps1` | **弹窗分类器 v2（OCR 化）**：金确定钮守卫+正文带 OCR（区域见 coords.md「弹窗」行）关键字分类——挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/羽毛复活(可点确定)/无/未知(红线停)；v1 像素模板退役（正文位置浮动即全灭，2026-10-27 实战） | `-Pid2 -Img` |
+| `wxpopup.ps1` | **弹窗分类器 v2（OCR 化，薄壳，主体在 `_wxcore` 的 `Invoke-WxPopup`）**：金确定钮守卫+正文带 OCR（区域见 coords.md「弹窗」行）关键字分类——挂机(可点确定)/顶号(红线停)/扩展券(只点取消)/羽毛复活(可点确定)/无/未知(红线停)；v1 像素模板退役（正文位置浮动即全灭，2026-10-27 实战） | `-Pid2 -Img` |
 | `wxstam.ps1` | **体力读数器**（选角页）：输出 LOW(<10 不可跑)/OK(≥10)，Mode=row1 顶态/row2 滚动态 | `-Pid2 -Mode` |
 | `wxresize.ps1` | **尺寸复位（可选工具）**：窗口明显异常时拉回设计尺寸 1138×708；日常开局不再强制调用。目标尺寸须与设计基准同长宽比 | `-Pid2 -ClientW -ClientH` |
 | `wxrecrop.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
