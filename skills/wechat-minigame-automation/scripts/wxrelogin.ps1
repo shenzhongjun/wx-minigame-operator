@@ -42,9 +42,10 @@ function Get-State {
     return $r.State
 }
 function Test-OcrTask([string]$task) {
-    $out = Invoke-Sub 'wxocr.ps1' @('-Pid2', $Pid2, '-Task', $task)
-    $joined = $out -join ' '
-    return ($joined -match "OCR=$task=HIT")
+    # 同进程调用（原为 wxocr.ps1 子进程）。引擎在进程内缓存：首次约 1s，之后每次约 0.25s（原每次约 3s）。
+    try { $o = Invoke-WxOcr -Pid2 $Pid2 -Task $task } catch { return $false }
+    if ($o.Err) { return $false }
+    return [bool]$o.Hit
 }
 function Get-PopupInfo {
     # 同进程调用 Invoke-WxPopup（原为 wxpopup.ps1 子进程 + 正则解析）。出错时保持旧默认值 POPUP_UNKNOWN → 走红线停机。

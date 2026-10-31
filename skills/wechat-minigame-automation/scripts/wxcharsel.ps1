@@ -16,6 +16,9 @@
 #    双击各等 1.5s」是选角段 34s 的主要来源（用户原话：点进游戏后停半天才切屏、切完又过好几秒才点角色）。
 # -Perf：输出各段累计计时（t=Ns），用于定位慢在哪一步；默认关，不影响逻辑。
 $scripts = $PSScriptRoot
+# 同进程模块库（2026-10-31 晚）：OCR 引擎在进程内缓存，本脚本 4 次 OCR 从各约 3s 降到首次 1s + 后续 0.25s。
+. (Join-Path $scripts '_wxcommon.ps1')
+. (Join-Path $scripts '_wxcore.ps1')
 $T0 = Get-Date
 function TS { if ($Perf) { return " t=$([int]((Get-Date) - $T0).TotalSeconds)s" } return "" }
 
@@ -27,9 +30,10 @@ function Invoke-Click([string]$steps) {
     & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
 function Test-OcrTask([string]$task) {
-    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task $task 2>&1
-    $joined = ($out | ForEach-Object { "$_" }) -join ' '
-    return ($joined -match "OCR=$task=HIT")
+    # 同进程调用（原为 wxocr.ps1 子进程）；引擎缓存后每次约 0.25s
+    try { $o = Invoke-WxOcr -Pid2 $Pid2 -Task $task } catch { return $false }
+    if ($o.Err) { return $false }
+    return [bool]$o.Hit
 }
 # 屏号判定。$prefer 指定先测哪一屏——切屏后目标已知，先测目标可省掉一次必然 MISS 的 OCR（约 1.5s）。
 function Get-ScreenNo([int]$prefer = 0) {
@@ -78,9 +82,10 @@ function Switch-Screen([int]$need) {
 if ($SkipGuard) {
     "guard skipped (caller confirmed charsel page)$(TS)"
 } else {
-    $probe = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 2>&1
-    $st = "ERR"
-    foreach ($line in $probe) { if ("$line" -match '^STATE=(\w+)') { $st = $Matches[1]; break } }
+    # 同进程 probe（原为子进程），异常/错误统一回 ERR，语义同旧版
+    $pr = $null
+    try { $pr = Invoke-WxProbe -Pid2 $Pid2 } catch { }
+    $st = if ($null -eq $pr -or $pr.Err) { "ERR" } else { $pr.State }
     "start state=$st$(TS)"
     if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
     if ($st -eq "GOLD_DIALOG") { "STOP: GOLD_DIALOG 弹窗在场，先走 wxrelogin.ps1 处理（弹窗分类红线在重登链）"; exit 9 }

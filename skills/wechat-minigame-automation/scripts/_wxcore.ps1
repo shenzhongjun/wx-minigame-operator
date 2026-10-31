@@ -242,9 +242,9 @@ function Invoke-WxPopup {
             $tmpPng = Join-Path $env:TEMP ("wrx_popup_" + [guid]::NewGuid().ToString('N') + ".png")
             $bmp.Save($tmpPng, [System.Drawing.Imaging.ImageFormat]::Png)
         }
-        $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'wxocr.ps1') -Img $tmpPng -X0 $BX0 -Y0 $BY0 -X1 $BX1 -Y1 $BY1 2>&1
-        $joined = ($out | ForEach-Object { "$_" }) -join ' '
-        if ($joined -match 'OCR_RAW=\[(.*)\]') { $raw = $Matches[1] }
+        # 同进程 OCR（原为 wxocr.ps1 子进程）：引擎已缓存，这里只需 ~0.25s
+        $ocr = Invoke-WxOcr -Img $tmpPng -X0 $BX0 -Y0 $BY0 -X1 $BX1 -Y1 $BY1
+        if (-not $ocr.Err) { $raw = "$($ocr.Raw)" }
         if ($Img -eq "" -and (Test-Path $tmpPng)) { Remove-Item $tmpPng -Force }
     }
     $bmp.Dispose()
@@ -259,4 +259,182 @@ function Invoke-WxPopup {
     $exitCode = 0
     if ($cls -eq "POPUP_RELOGIN" -or $cls -eq "POPUP_UNKNOWN") { $exitCode = 3 }
     return (New-WxPopupResult -ExitCode $exitCode -Popup $cls -GoldBtn $goldBtn -OcrRaw $raw)
+}
+
+# ================= OCR（2026-10-31 迁入，带引擎缓存）=================
+# 原理不变：设计坐标裁剪 → 灰度反相 → 双三次放大 F 倍 → Windows.Media.Ocr(zh-Hans)。
+# ⚠️ 关键优化：OcrEngine 创建（加载 zh-Hans 模型）+ WinRT 程序集加载约 2~2.5s，原实现每次子进程
+#    都重建 → 单次 wxocr 实测约 3s（注释里的「~250ms」只是识别本身）。改为进程内缓存引擎后，
+#    只有第一次付这个成本，后续每次 <1s。这是重登链最大的单点优化。
+$script:WxOcrEngine = $null
+$script:WxOcrAsTask = $null
+$script:WxOcrAvailable = $null
+
+$script:WxOcrTasks = @{
+    autobtn = @{ x0 = 175; y0 = 158; x1 = 275; y1 = 195; kind = 'auto'; f = 12 }
+    charsel = @{ x0 = 0; y0 = 56; x1 = 200; y1 = 115; kind = 'kw'; kw = '选择角色' }
+    scr1w = @{ x0 = 36; y0 = 130; x1 = 215; y1 = 204; kind = 'kw'; kw = '早睡早起身体好'; minhit = 3; kw2 = '圣骑士' }
+    scr2w = @{ x0 = 36; y0 = 234; x1 = 215; y1 = 290; kind = 'kw'; kw = '豁达自在乐逍遥'; minhit = 3; kw2 = '重装机兵' }
+    town = @{ x0 = 140; y0 = 150; x1 = 270; y1 = 205; kind = 'kw'; kw = '选角'; minhit = 2; retry = 2 }
+    server = @{ x0 = 488; y0 = 447; x1 = 638; y1 = 492; kind = 'kw'; kw = '巨龙山脉'; minhit = 3 }
+}
+
+function New-WxOcrResult {
+    param([int]$ExitCode = 0, [string]$Err = "", [string]$Task = "", [string]$Kind = "raw",
+        [bool]$Hit = $false, [string]$Raw = "", [string]$Class = "", [string]$DebugLine = "")
+    [pscustomobject]@{ ExitCode = $ExitCode; Err = $Err; Task = $Task; Kind = $Kind; Hit = $Hit; Raw = $Raw; Class = $Class; DebugLine = $DebugLine }
+}
+
+function Initialize-WxOcrEngine {
+    if ($null -ne $script:WxOcrAvailable) { return $script:WxOcrAvailable }
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    $null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
+    $null = [Windows.Storage.Streams.DataWriter, Windows.Storage.Streams, ContentType = WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]
+    $null = [Windows.Globalization.Language, Windows.Foundation, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+    $script:WxOcrAsTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+            $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+        })[0]
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('zh-Hans-CN'))
+    if ($null -eq $engine) { $script:WxOcrAvailable = $false; return $false }
+    $script:WxOcrEngine = $engine
+    $script:WxOcrAvailable = $true
+    return $true
+}
+
+function Invoke-WxOcrAwait($op, $type) {
+    $t = $script:WxOcrAsTask.MakeGenericMethod($type).Invoke($null, @($op))
+    $t.Wait(-1) | Out-Null
+    return $t.Result
+}
+
+# 单次取图 + 识别（不做 retry，retry 由 Invoke-WxOcr 外层循环处理）
+function Invoke-WxOcrOnce {
+    param([int]$Pid2 = 0, [string]$Img = "", [string]$Task = "", [int]$X0 = 0, [int]$Y0 = 56,
+        [int]$X1 = 200, [int]$Y1 = 115, [int]$F = 8, [switch]$NoInvert, [string]$Kind = "raw",
+        $TaskDef = $null, [switch]$Debug)
+
+    if ($Img -ne "") {
+        if (-not (Test-Path $Img)) { return (New-WxOcrResult -ExitCode 4 -Err "image not found: $Img" -Task $Task -Kind $Kind) }
+        $bmp = New-Object System.Drawing.Bitmap $Img
+        if ($bmp.Width -lt 200 -or $bmp.Height -lt 150) {
+            $bmp.Dispose()
+            return (New-WxOcrResult -ExitCode 4 -Err "image $($bmp.Width)x$($bmp.Height) 过小，-Img 需传完整客户区截图" -Task $Task -Kind $Kind)
+        }
+        if ($bmp.Width -ne $WX_DESIGN_W -or $bmp.Height -ne $WX_DESIGN_H) {
+            $norm = Resize-WxBitmapNearest $bmp $WX_DESIGN_W $WX_DESIGN_H
+            if (-not [object]::ReferenceEquals($norm, $bmp)) { $bmp.Dispose() }
+            $bmp = $norm
+        }
+    } else {
+        $hwnd = Find-GameWindow -Pid2 $Pid2
+        if ($hwnd -eq [IntPtr]::Zero) { return (New-WxOcrResult -ExitCode 1 -Err "window not found (pid=$Pid2)" -Task $Task -Kind $Kind) }
+        $geo = Get-ClientGeometry $hwnd
+        if (-not (Test-WxMinClientW $geo.W)) {
+            return (New-WxOcrResult -ExitCode 7 -Err "window too small ($($geo.W)x$($geo.H) < ${WX_MIN_CLIENT_W} width)，OCR 拒读" -Task $Task -Kind $Kind)
+        }
+        $bmp = Get-DesignBitmap $geo
+    }
+
+    if ($X1 -ge $bmp.Width -or $Y1 -ge $bmp.Height -or $X0 -lt 0 -or $Y0 -lt 0 -or $X0 -gt $X1 -or $Y0 -gt $Y1) {
+        $bmp.Dispose()
+        return (New-WxOcrResult -ExitCode 4 -Err "OCR 区域非法 ($X0,$Y0)-($X1,$Y1)" -Task $Task -Kind $Kind)
+    }
+
+    $bw = $X1 - $X0 + 1; $bh = $Y1 - $Y0 + 1
+    $gs = New-Object System.Drawing.Bitmap $bw, $bh
+    for ($y = 0; $y -lt $bh; $y++) {
+        for ($x = 0; $x -lt $bw; $x++) {
+            $c = $bmp.GetPixel($X0 + $x, $Y0 + $y)
+            if ($NoInvert) { $gray = [int](0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B) }
+            else { $gray = 245 - [int](0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B) }
+            if ($gray -lt 0) { $gray = 0 }
+            if ($gray -gt 255) { $gray = 255 }
+            $gs.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($gray, $gray, $gray))
+        }
+    }
+    $bmp.Dispose()
+    $big = New-Object System.Drawing.Bitmap ($bw * $F), ($bh * $F)
+    $gr = [System.Drawing.Graphics]::FromImage($big)
+    $gr.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $gr.DrawImage($gs, 0, 0, $big.Width, $big.Height)
+    $gr.Dispose()
+    $gs.Dispose()
+    $ms = New-Object System.IO.MemoryStream
+    $big.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $big.Dispose()
+    $bytes = $ms.ToArray()
+    $ms.Dispose()
+
+    if (-not (Initialize-WxOcrEngine)) {
+        return (New-WxOcrResult -ExitCode 0 -Task $Task -Kind "unavailable" -Raw "UNAVAILABLE")
+    }
+
+    $ras = [Windows.Storage.Streams.InMemoryRandomAccessStream]::new()
+    $dw = [Windows.Storage.Streams.DataWriter]::new($ras)
+    $dw.WriteBytes($bytes)
+    Invoke-WxOcrAwait ($dw.StoreAsync()) ([uint32]) | Out-Null
+    $dw.DetachStream() | Out-Null
+    $ras.Seek(0)
+    $decoder = Invoke-WxOcrAwait ([Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $sb = Invoke-WxOcrAwait ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $res = Invoke-WxOcrAwait ($script:WxOcrEngine.RecognizeAsync($sb)) ([Windows.Media.Ocr.OcrResult])
+    $ras.Dispose()
+
+    $text = ($res.Text -replace '\s+', '')
+    $hit = $false; $cls = ""
+    if ($Kind -eq 'auto') {
+        $cls = "UNKNOWN"
+        if (Test-WxKwHit $text '取消自动') { $cls = "ON" }
+        elseif (Test-WxKwHit $text '自动战斗') { $cls = "OFF" }
+    } elseif ($Kind -eq 'kw') {
+        $kw = $TaskDef.kw
+        $minhit = 0; if ($TaskDef -and $TaskDef.Contains('minhit')) { $minhit = $TaskDef.minhit }
+        $pool = $kw
+        $kw2 = ''
+        if ($TaskDef -and $TaskDef.Contains('kw2')) { $kw2 = $TaskDef.kw2; $pool = "$kw$kw2" }
+        $hit = $text.Contains($kw) -or ($kw2 -ne '' -and $text.Contains($kw2))
+        if (-not $hit) { $hit = Test-WxKwHit $text $pool $minhit }
+    }
+    $dbg = ""
+    if ($Debug) { $dbg = "debug: task=$Task region=($X0,$Y0)-($X1,$Y1) scale=$F lines=$($res.Lines.Count) invert=$(-not $NoInvert)" }
+    return (New-WxOcrResult -ExitCode 0 -Task $Task -Kind $Kind -Hit $hit -Raw $text -Class $cls -DebugLine $dbg)
+}
+
+# IN : 画面任意（或 -Img 传完整客户区截图），不假设任何前置状态
+# OUT: Hit=关键字是否命中（kind=kw）/ Class=ON|OFF|UNKNOWN（kind=auto）/ Raw=识别原文（kind=raw）
+function Invoke-WxOcr {
+    param([int]$Pid2 = 0, [string]$Img = "", [string]$Task = "", [int]$X0 = 0, [int]$Y0 = 56,
+        [int]$X1 = 200, [int]$Y1 = 115, [int]$F = 8, [switch]$NoInvert, [switch]$Debug, [int]$RetryLeft = -1)
+
+    $kind = 'raw'
+    $t = $null
+    if ($Task -ne "") {
+        if (-not $script:WxOcrTasks.ContainsKey($Task)) {
+            return (New-WxOcrResult -ExitCode 4 -Err "unknown task '$Task'（可用: $($script:WxOcrTasks.Keys -join ', ')）")
+        }
+        $t = $script:WxOcrTasks[$Task]
+        $X0 = $t.x0; $Y0 = $t.y0; $X1 = $t.x1; $Y1 = $t.y1
+        $kind = $t.kind
+        if ($t.Contains('f')) { $F = $t.f }
+    }
+
+    # MISS 重扫：仅实时路径 + 任务配了 retry 才生效（-Img 离线同图恒定，重扫无意义）
+    $attempts = 1
+    if ($Img -eq "" -and $Task -ne "" -and $null -ne $t -and $t.Contains('retry')) {
+        $retryN = if ($RetryLeft -ge 0) { $RetryLeft } else { [int]$t.retry }
+        $attempts = $retryN + 1
+    }
+
+    $last = $null
+    for ($a = 1; $a -le $attempts; $a++) {
+        $current = Invoke-WxOcrOnce -Pid2 $Pid2 -Img $Img -Task $Task -X0 $X0 -Y0 $Y0 -X1 $X1 -Y1 $Y1 -F $F -NoInvert:$NoInvert -Kind $kind -TaskDef $t -Debug:$Debug
+        if ($current.Err) { return $current }
+        $last = $current
+        if ($current.Hit) { return $current }
+        if ($Task -eq "" -or $current.Kind -eq 'unavailable') { return $current }
+        if ($a -lt $attempts) { Start-Sleep -Milliseconds 800 }
+    }
+    return $last
 }
