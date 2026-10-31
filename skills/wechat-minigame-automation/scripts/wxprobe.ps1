@@ -76,35 +76,76 @@ $TWX0=658; $TWY0=60;  $TWX1=735; $TWY1=155   # 福利暗金
 $TSX0=848; $TSY0=80;  $TSX1=895; $TSY1=115   # 商城金
 # 礼包 ¥30 金钮区 (529,520)-(763,603) 已于 2026-10-31 迁至 _wxcommon.ps1 $WX_PACK_PROBES（归 wxpopup）
 
-function CountPixels([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
-  $n = 0
-  for ($y=$y0; $y -le $y1; $y+=2) { for ($x=$x0; $x -le $x1; $x+=2) {
-    $c = $bmp.GetPixel($x,$y)
-    if (& $pred $c) { $n++ }
-  }}
+# ---- 像素采样核心（2026-10-31 性能重写）----
+# 原实现逐像素 $bmp.GetPixel()：单次 ~0.2ms，一笔 probe 约 4.3 万次 → 实测稳定 9s（三次 9327/8948/9261ms）。
+# 改为 LockBits 一次性取整图字节，循环内只做数组索引 + 整数比较；区域/步长/阈值语义一律不变。
+# 用图像自身 PixelFormat 锁位（24bpp=Rgb / 32bpp=Argb 都是 BGR 顺序），避免格式转换引入 ±1 色彩差。
+# 谓词改整数 id：1=金按钮 2=绿字 3=白字 4=暗红战力 5=town金色 6=hp混合（避免每像素构造 Color + 调 scriptblock）
+$script:PxBuf = $null; $script:PxStride = 0; $script:PxBpp = 4
+function Init-PxBuf {
+  $rect = New-Object System.Drawing.Rectangle 0, 0, $bmp.Width, $bmp.Height
+  $bpp = [int]([System.Drawing.Image]::GetPixelFormatSize($bmp.PixelFormat) / 8)
+  $work = $bmp; $disposeWork = $false
+  if ($bpp -lt 3) {
+    $work = New-Object System.Drawing.Bitmap $bmp.Width, $bmp.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $gg = [System.Drawing.Graphics]::FromImage($work)
+    $gg.DrawImage($bmp, 0, 0, $bmp.Width, $bmp.Height); $gg.Dispose()
+    $bpp = 4; $disposeWork = $true
+  }
+  $data = $work.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly, $work.PixelFormat)
+  $script:PxStride = $data.Stride
+  $script:PxBpp = $bpp
+  $script:PxBuf = New-Object byte[] ($data.Stride * $bmp.Height)
+  [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $script:PxBuf, 0, $script:PxBuf.Length)
+  $work.UnlockBits($data)
+  if ($disposeWork) { $work.Dispose() }
+}
+function CountPixels([int]$x0,[int]$y0,[int]$x1,[int]$y1,[int]$pred) {
+  $buf = $script:PxBuf; $st = $script:PxStride; $bp = $script:PxBpp; $n = 0
+  for ($y=$y0; $y -le $y1; $y+=2) {
+    $row = $y * $st
+    for ($x=$x0; $x -le $x1; $x+=2) {
+      $i = $row + ($x * $bp)
+      $b = $buf[$i]; $g = $buf[$i+1]; $r = $buf[$i+2]
+      if ($pred -eq 1) { if ($r -gt 200 -and $g -gt 140 -and $b -lt 110 -and ($r-$b) -gt 90) { $n++ } }
+      elseif ($pred -eq 2) { if ($g -gt 170 -and ($g-$r) -gt 50 -and ($g-$b) -gt 50) { $n++ } }
+      elseif ($pred -eq 3) { if ($r -gt 215 -and $g -gt 215 -and $b -gt 215) { $n++ } }
+      elseif ($pred -eq 4) { if ($r -ge 100 -and $r -le 235 -and $g -lt 80 -and $b -lt 80 -and ($r-$g) -gt 60) { $n++ } }
+      elseif ($pred -eq 5) { if ($r -ge 170 -and $g -ge 120 -and $b -le 140 -and ($r-$b) -ge 60) { $n++ } }
+      else                 { if ((($g -gt 140 -and ($g-$r) -gt 40 -and ($g-$b) -gt 40)) -or ($r -gt 170 -and ($r-$g) -gt 60)) { $n++ } }
+    }
+  }
   return $n
 }
 # town 探针专用：只隔列采样（x+=2，y 逐行）。阈值=蓝本 town4-probe.ps1 全分辨率标定值÷2；
 #   2×2 隔行对 pack 区细纹理走样风险大（9610/4=2402 距 750 仅 3.4% 余量）故弃，逐行无此问题。
-function CountPixelsX2([int]$x0,[int]$y0,[int]$x1,[int]$y1,[scriptblock]$pred) {
-  $n = 0
-  for ($y=$y0; $y -le $y1; $y++) { for ($x=$x0; $x -le $x1; $x+=2) {
-    if (& $pred $bmp.GetPixel($x,$y)) { $n++ }
-  }}
+function CountPixelsX2([int]$x0,[int]$y0,[int]$x1,[int]$y1,[int]$pred) {
+  $buf = $script:PxBuf; $st = $script:PxStride; $bp = $script:PxBpp; $n = 0
+  for ($y=$y0; $y -le $y1; $y++) {
+    $row = $y * $st
+    for ($x=$x0; $x -le $x1; $x+=2) {
+      $i = $row + ($x * $bp)
+      $b = $buf[$i]; $g = $buf[$i+1]; $r = $buf[$i+2]
+      if ($pred -eq 4) { if ($r -ge 100 -and $r -le 235 -and $g -lt 80 -and $b -lt 80 -and ($r-$g) -gt 60) { $n++ } }
+      else             { if ($r -ge 170 -and $g -ge 120 -and $b -le 140 -and ($r-$b) -ge 60) { $n++ } }
+    }
+  }
   return $n
 }
+Init-PxBuf
 
 # 金色大按钮: R>200 G>140 B<110 R-B>90
-$nGold = CountPixels $RX0 $RY0 $RX1 $RY1 { param($c) $c.R -gt 200 -and $c.G -gt 140 -and $c.B -lt 110 -and ($c.R-$c.B) -gt 90 }
+$nGold = CountPixels $RX0 $RY0 $RX1 $RY1 1
 # 绿色文字: G>170 G-R>50 G-B>50
-$nStam   = CountPixels $SX0 $SY0 $SX1 $SY1 { param($c) $c.G -gt 170 -and ($c.G-$c.R) -gt 50 -and ($c.G-$c.B) -gt 50 }
+$nStam   = CountPixels $SX0 $SY0 $SX1 $SY1 2
 # 结算暗红块（三点采样取二）
 $nSettle = 0
 for ($y=$BY0; $y -lt ($BY0+$BH); $y+=3) {
   $hit = 0
   foreach ($dx in @(-25,0,25)) {
-    $c = $bmp.GetPixel($BX+$dx,$y)
-    if ($c.R -gt 100 -and ($c.R-$c.B) -gt 50 -and $c.G -gt 22 -and $c.G -lt 78) { $hit++ }
+    $i = ($y * $script:PxStride) + (($BX+$dx) * $script:PxBpp)
+    $b = $script:PxBuf[$i]; $g = $script:PxBuf[$i+1]; $r = $script:PxBuf[$i+2]
+    if ($r -gt 100 -and ($r-$b) -gt 50 -and $g -gt 22 -and $g -lt 78) { $hit++ }
   }
   if ($hit -ge 2) { $nSettle++ }
 }
@@ -121,15 +162,14 @@ if ($Quick) {
 }
 
 # 血条: 绿或红
-$nHp = CountPixels $HX0 $HY0 $HX1 $HY1 { param($c) (($c.G -gt 140 -and ($c.G-$c.R) -gt 40 -and ($c.G-$c.B) -gt 40)) -or ($c.R -gt 170 -and ($c.R-$c.G) -gt 60) }
+$nHp = CountPixels $HX0 $HY0 $HX1 $HY1 6
 # 左侧分类栏白字（nLogin 已随 LOGIN_PAGE 退役删除，2026-10-27）
-$nSide = CountPixels $NX0 $NY0 $NX1 $NY1 { param($c) $c.R -gt 215 -and $c.G -gt 215 -and $c.B -gt 215 }
+$nSide = CountPixels $NX0 $NY0 $NX1 $NY1 3
 
-# town 三探针 + 新手礼包 ¥30（v1.1.17；区域/谓词/阈值权威=coords.md「town 探针判据」节）
-$predTownGold = { param($c) $c.R -ge 170 -and $c.G -ge 120 -and $c.B -le 140 -and ($c.R-$c.B) -ge 60 }
-$nPower = CountPixelsX2 $TPX0 $TPY0 $TPX1 $TPY1 { param($c) $c.R -ge 100 -and $c.R -le 235 -and $c.G -lt 80 -and $c.B -lt 80 -and ($c.R-$c.G) -gt 60 }
-$nTownW = CountPixelsX2 $TWX0 $TWY0 $TWX1 $TWY1 $predTownGold
-$nShop  = CountPixelsX2 $TSX0 $TSY0 $TSX1 $TSY1 $predTownGold
+# town 三探针（v1.1.17；区域/谓词/阈值权威=coords.md「town 探针判据」节）
+$nPower = CountPixelsX2 $TPX0 $TPY0 $TPX1 $TPY1 4
+$nTownW = CountPixelsX2 $TWX0 $TWY0 $TWX1 $TWY1 5
+$nShop  = CountPixelsX2 $TSX0 $TSY0 $TSX1 $TSY1 5
 # 礼包像素计数已随弹窗判定迁至 wxpopup（2026-10-31），probe 不再采样 pack 区
 # 阈值（全分辨率标定÷2）：power 300→150 / welfare 100→50 / shop 60→30 / pack 3000→1500
 $townVotes = ($nPower -ge 150) + ($nTownW -ge 50) + ($nShop -ge 30)

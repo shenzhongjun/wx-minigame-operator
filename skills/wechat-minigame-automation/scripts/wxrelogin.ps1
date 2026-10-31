@@ -13,9 +13,16 @@ param([int]$Pid2 = 0, [int]$Char = 1, [int]$TownTimeoutSec = 90, [switch]$Assume
 $ErrorActionPreference = 'Stop'
 $scripts = $PSScriptRoot
 $ps = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+# 分段计时（2026-10-31 性能体检，纯输出不影响逻辑，可整段删）
+$T0 = Get-Date
+$SubMs = 0; $SubN = 0
+function Now-S { [int]((Get-Date) - $T0).TotalSeconds }
 
 function Invoke-Sub([string]$script, [string[]]$argList) {
-    & $ps -NoProfile -ExecutionPolicy Bypass -File "$scripts\$script" @argList 2>&1 | ForEach-Object { "$_" }
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $r = & $ps -NoProfile -ExecutionPolicy Bypass -File "$scripts\$script" @argList 2>&1 | ForEach-Object { "$_" }
+    $sw.Stop(); $script:SubMs += $sw.ElapsedMilliseconds; $script:SubN++
+    $r
 }
 function Get-State {
     $out = Invoke-Sub 'wxprobe.ps1' @('-Pid2', $Pid2)
@@ -38,7 +45,7 @@ function Invoke-Click([string]$steps) {
 
 # ---- 阶段1：金弹窗处理（红线分类）----
 $st = Get-State
-"phase1 start state=$st"
+"phase1 start state=$st t=$(Now-S)s"
 if ($st -eq "ERR") { "STOP: probe error"; exit 9 }
 # 弹窗优先（2026-10-31 定版：弹窗一律归 wxpopup 判）。礼包弹窗压屏时 probe 只能报 UNKNOWN，
 # 必须先关掉再判场景——否则后面 server/charsel OCR 全被弹窗挡住，白等 50 秒才失败。
@@ -52,7 +59,7 @@ if ($cls -eq "POPUP_PACK") {
 }
 if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) { "STOP: state=$st 已在游戏内，重登链不适用"; exit 9 }
 if ($st -eq "GOLD_DIALOG") {
-    "phase1 popup=$cls"
+    "phase1 popup=$cls t=$(Now-S)s"
     if ($cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
         "STOP: GOLD_DIALOG 分类=$cls（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
     }
@@ -68,10 +75,11 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 2
 }
 if ($loginHit) {
-    "phase2 login page confirmed (server OCR)"
+    "phase2 login page confirmed (server OCR) t=$(Now-S)s"
     Invoke-Click "571:527:5000"
+    "phase2 enter-game clicked t=$(Now-S)s"
 } else {
-    "phase2: 30s 未见登录页（可能已在选角页/加载中），继续按后续阶段判定"
+    "phase2: 30s 未见登录页（可能已在选角页/加载中），继续按后续阶段判定 t=$(Now-S)s"
 }
 
 # ---- 阶段3：选角（OCR 确认后委托 wxcharsel 幂等链）----
@@ -82,10 +90,11 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 2
 }
 if (-not $charselHit) { "STOP: 20s 内未确认选角页（「选择角色」标题未命中），截图人工核对"; exit 9 }
-"phase3 charsel confirmed -> wxcharsel char$Char startgame"
+"phase3 charsel confirmed -> wxcharsel char$Char startgame t=$(Now-S)s"
 $chOut = Invoke-Sub 'wxcharsel.ps1' @('-Char', $Char, '-StartGame', '-Pid2', $Pid2)
 $chOut | ForEach-Object { "charsel| $_" }
 $chExit = $LASTEXITCODE
+"phase3 wxcharsel done t=$(Now-S)s exit=$chExit"
 if ($chExit -ne 0) { "STOP: wxcharsel exit=$chExit"; exit 9 }
 
 # ---- 阶段4：终态轮询（礼包弹窗关闭 / TOWN_PAGE 成功）----
@@ -95,7 +104,7 @@ $packClosed = 0; $idleReclicked = 0
 $deadline = (Get-Date).AddSeconds($TownTimeoutSec)
 while ((Get-Date) -lt $deadline) {
     $st = Get-State
-    if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed"; exit 0 }
+    if ($st -eq "TOWN_PAGE") { "RELOGIN_OK state=TOWN_PAGE char=$Char packClosed=$packClosed t=$(Now-S)s"; "perf: subprocess=$SubN calls / $([int]($SubMs/1000))s"; exit 0 }
     $cls = Get-PopupClass
     if ($cls -eq "POPUP_PACK") {
         if ($packClosed -ge 3) { "STOP: 礼包红叉已点 3 次仍未清除，截图人工核对"; exit 9 }
