@@ -82,11 +82,17 @@ if ($st -eq "TOWN_PAGE") { "ALREADY_TOWN: 已在主城，重登链不适用（�
 if ($st -in @("TOWER_PAGE", "SETTLE_PAGE", "AUTO_ON", "AUTO_OFF")) { "STOP: state=$st 已在游戏内，重登链不适用"; exit 9 }
 if ($st -eq "GOLD_DIALOG") {
     "phase1 popup=$($pi.Cls)$(TS)"
-    if ($pi.Cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
-        "STOP: GOLD_DIALOG 分类=$($pi.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
+    # 2026-11-01 P3：切到单源守卫（传入已探分类，不重复探）。VerifyLogin 不用——阶段2 自会轮询登录页。
+    $g = Invoke-WxGoldGuard -Pid2 $Pid2 -Cls $pi.Cls -AssumeGold:$AssumeGold
+    if ($g.Verdict -eq "NONE") {
+        # 行为变更（修事件20 缺陷）：原先 POPUP_NONE 会走红线 STOP；
+        # probe 假金（金边装饰提示框欺骗）本就无真弹窗，应继续而非停机。
+        "phase1 popup=NONE (probe false gold, event20) -> continue$(TS)"
+    } elseif ($g.Verdict -ne "OK") {
+        "STOP: GOLD_DIALOG 分类=$($g.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
+    } else {
+        "phase1 confirm clicked cls=$($g.Cls)$(if ($AssumeGold) { ' (AssumeGold)' } else { '' })"
     }
-    Invoke-Click "700:513:800"
-    "phase1 confirm clicked cls=$($pi.Cls)$(if ($AssumeGold) { ' (AssumeGold)' } else { '' })"
 }
 
 # ---- 阶段2：server OCR 轮询等登录页 → 点进入游戏 ----
@@ -141,8 +147,12 @@ while ((Get-Date) -lt $deadline) {
     if ($st -eq "GOLD_DIALOG") {
         if ($idleReclicked -ge 2) { "STOP: 金弹窗反复在屏（分类后仍无法清除），截图人工核对"; exit 9 }
         "phase4 GOLD_DIALOG popup=$($pi.Cls)"
-        if ($pi.Cls -eq "POPUP_IDLE") { $idleReclicked++; Invoke-Click "700:513:800"; continue }
-        "STOP: GOLD_DIALOG 分类=$($pi.Cls)（红线，绝不自动点）"; exit 9
+        # 2026-11-01 P3：切到单源守卫（传入已探分类）。重试上限仍归本链管——Guard 不管点击次数。
+        # 行为变更（修事件20 缺陷）：POPUP_NONE 原先走红线 STOP，现按假金处理继续等主城。
+        $g = Invoke-WxGoldGuard -Pid2 $Pid2 -Cls $pi.Cls
+        if ($g.Verdict -eq "OK") { $idleReclicked++; continue }
+        if ($g.Verdict -eq "NONE") { "phase4 popup=NONE (probe false gold) -> keep waiting"; continue }
+        "STOP: GOLD_DIALOG 分类=$($g.Cls)（红线，绝不自动点）"; exit 9
     }
     Start-Sleep -Milliseconds 1000
 }

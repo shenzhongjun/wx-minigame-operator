@@ -24,17 +24,21 @@ function New-WxGuardResult {
 function Invoke-WxGoldGuard {
     param(
         [int]$Pid2 = 0,
+        [string]$Cls = "",      # 调用方已探到的分类。非空则跳过 Invoke-WxPopup，避免重复探（约 0.3s）
         [switch]$AssumeGold,    # 顶号弹窗：用户授权后对非 IDLE 分类也放行点击（wxrelogin 阶段1 语义）
         [switch]$VerifyLogin,   # 点完复验是否被踢登录页（wxgrind 需要；wxrelogin 靠后续阶段判，不用）
         [int]$SettleMs = 2000   # 复验前等待（保留 wxgrind 原 2s，零漂移）
     )
-    $pi = $null
-    try { $pi = Invoke-WxPopup -Pid2 $Pid2 } catch { $pi = $null }
-    if (-not $pi -or $pi.Err) {
-        # 分类失败 → 保守红线（语义同 wxrelogin Get-PopupInfo 的默认 POPUP_UNKNOWN）
-        return (New-WxGuardResult -Verdict "STOP" -Cls "POPUP_UNKNOWN")
+    $cls = $Cls
+    if ($cls -eq "") {
+        $pi = $null
+        try { $pi = Invoke-WxPopup -Pid2 $Pid2 } catch { $pi = $null }
+        if (-not $pi -or $pi.Err) {
+            # 分类失败 → 保守红线（语义同 wxrelogin Get-PopupInfo 的默认 POPUP_UNKNOWN）
+            return (New-WxGuardResult -Verdict "STOP" -Cls "POPUP_UNKNOWN")
+        }
+        $cls = $pi.Popup
     }
-    $cls = $pi.Popup
 
     # 假金：probe 被金边装饰提示框欺骗（事件20）→ 继续等待，不停机不点击
     if ($cls -eq "POPUP_NONE") { return (New-WxGuardResult -Verdict "NONE" -Cls $cls) }
