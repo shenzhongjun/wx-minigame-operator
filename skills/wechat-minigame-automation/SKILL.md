@@ -32,7 +32,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 ## 执行规则
 
 1. **坐标一律是设计坐标（基准 1138×708），详见 coords.md（权威表述唯一版本）**。禁止把 Read 显示图上量出的像素直接当点击坐标——显示的截图是缩放图，缩放比例随窗口大小变化，不是固定值；换算一律走函数严禁手算（见 §0 客户区结构）。
-2. **自动战斗开启唯一入口=wxautoensure.ps1（OCR 单判据，v1.1.12 起全链统一）**：OCR 读左上角按钮文字（区域/锚点见 coords.md「自动战斗按钮」节）。文字=「自动战斗」=还没开（OFF），点锚点开启；文字=「取消自动」=已开（ON），别碰；读不出来（多半是转场黑屏）继续轮询。点完必须重读验证已变 ON；ON 优先判定，绝不把已开的点关。超时或点击超 3 次 → FAIL 截图人工核对。自动战斗与血量、白字 tip、按钮底色零关系（事件10/11，见 incidents.md）。同角色登录期间换图保持，切角色必重置。wxclick 的 auto/autonow 步骤=内部委托 wxautoensure（FAIL 整体 exit 3，语义不变）；**旧模板匹配 gated 循环已退役**：wxautostate 与 wxprobe 的 AUTO_ON/AUTO_OFF 输出态仅存诊断用途（wxautostate 消费方=wxrecrop/wxregress 离线）；**但 wxprobe 全量模式以 btnMatch 模板可见性作结算门控（区分塔页红月），属现役——wxwait 等结算轮询在用**。
+2. **自动战斗开启唯一入口=wxautoensure.ps1（OCR 单判据，v1.1.12 起全链统一）**：OCR 读左上角按钮文字（区域/锚点见 coords.md「自动战斗按钮」节）。文字=「自动战斗」=还没开（OFF），点锚点开启；文字=「取消自动」=已开（ON），别碰；读不出来（多半是转场黑屏）继续轮询。点完必须重读验证已变 ON；ON 优先判定，绝不把已开的点关。超时或点击超 3 次 → FAIL 截图人工核对。自动战斗与血量、白字 tip、按钮底色零关系（事件10/11，见 incidents.md）。同角色登录期间换图保持，切角色必重置。wxclick 的 auto/autonow 步骤=内部委托 wxautoensure（FAIL 整体 exit 3，语义不变）；**旧模板匹配 gated 循环已退役**：wxautostate 与 wxprobe 的 AUTO_ON/AUTO_OFF 输出态仅存诊断用途（wxautostate 消费方=wxrecrop/wxregress 离线）；**但 wxprobe 全量模式以 btnMatch 模板可见性作结算门控（区分塔页红月），属现役——`wxrelogin`/`wxcharsel` 的起点判定走全量在用**。
 3. 「开启冥渊」点击后必须确认按钮文字已变「冥渊模式」。
 4. 重登/重开后选中角色**重置为第1个**（事件5）；同会话再进选角页则停在「上次选中角色所在屏」（2026-10-27 实证）。选中态 OCR 判不了——选卡一律走 wxcharsel 幂等双击。
 5. 角色死亡弹「是否使用不死鸟羽毛」→ 点「立即复活」（坐标见 `coords.md`「死亡弹窗」行；已授权）。**统一口径：最多复活两次；复活两次仍打不过 = 任务安排有问题，停手上报用户。**
@@ -104,7 +104,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxrecrop.ps1` | **模板重裁一条龙**：布局重排后从关/开双实拍自动求 bbox→裁模板→更新 _wxcommon 常量→离线验证，失败自动回滚；完成后必跑 wxregress ⚠️暂停中（同 wxregress 条目） `-ImgOff -ImgOn` |
 | `wxautoensure.ps1` | **自动战斗快速确保 v2（v1.1.10 新增）**：出战后立即调用，轮询 OCR autobtn（OFF→点锚点（见 coords.md）→重读验证；ON 优先判定不误关），进程内调用实测 2.0s 开启（旧链 4-5s）；超时/点击超3次 FAIL | `-Pid2 -TimeoutSec` |
 | `wxnav-tower.ps1` | **塔练习导航链**：主城→副本→塔→练习模式→出战，三段断言（A 副本tab金≥150 / B 塔页红≥100 / **C 练习说明框白字块≥400**，断言区域见 coords.md「毁灭之塔」节）失败即截图停机 | `-Pid2 -SkipStart` |
-| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxwait/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/轮询等待指定状态/枚举窗口/文档规则校验（~~wxocrbtn~~ 已删，v1.1.3 并入 wxocr） | 见脚本头 |
+| `wxshot/wxcrop/wxbtnsig/wxrgbcol/wxwhere/wxrestore/wxscroll/wxenumwin/wxdoclint` | 截图（锚定模式已归一化到设计尺寸）/裁剪放大/签名计数/RGB采样/窗口位置/恢复前台/滚轮滚动/枚举窗口/文档规则校验（~~wxocrbtn~~ 已删，v1.1.3 并入 wxocr；~~wxwait~~ 已删，零脚本调用） | 见脚本头 |
 
 探针状态动作：`GOLD_DIALOG`→按专家红线处理（先 `wxpopup` 分类再决定）；`STAMINA_POP`→停（点空白关）；`SETTLE_PAGE`→点「再来一次」；`AUTO_ON` 勿点；`AUTO_OFF`→auto 点；`TOWN_PAGE`→主城，正常流程；`UNKNOWN`→人工截图（登录页/选角页 UNKNOWN 属预期——页面身份以 OCR 为准；主城自 2026-10-31 起由三探针判 TOWN_PAGE，不再依赖 OCR）。
 
@@ -114,7 +114,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 
 ## 7. 像素探针原理
 
-结算页「再来一次」按钮是暗红底，认色就够：红要亮（R>100）、红要比蓝深得多（R-B>50）、绿在中间档（22<G<78）。扫描带 BX=900、y 225~445（v1.1.14 重标定，细节见 coords.md）；扫到红块后从红块顶部往下 20px 点下去。**「再来一次」位置固定不变**：两栏/三栏结算里它都在第一栏、位置一样（旧「面板 Y 浮动 ±45px」说法系当年两栏/三栏没分清所致，作废）——待实机验证后坐标固化写死（开发待办），验证前扫描取点兜底。自动战斗开关不认色，只认按钮文字（OCR，唯一入口见 §执行规则2）。模板匹配只剩一个现役用途：wxprobe 全量模式用模板是否可见做结算门控（区分塔页红月），wxwait 等结算在用；模板持续 UNKNOWN 且窗口同比例，才说明真重排了，才走 wxrecrop 重裁。改阈值前先 `wxautostate -Debug`/`-Img` 采样；按钮 RGB 实测数据见 `coords.md`。
+结算页「再来一次」按钮是暗红底，认色就够：红要亮（R>100）、红要比蓝深得多（R-B>50）、绿在中间档（22<G<78）。扫描带 BX=900、y 225~445（v1.1.14 重标定，细节见 coords.md）；扫到红块后从红块顶部往下 20px 点下去。**「再来一次」位置固定不变**：两栏/三栏结算里它都在第一栏、位置一样（旧「面板 Y 浮动 ±45px」说法系当年两栏/三栏没分清所致，作废）——待实机验证后坐标固化写死（开发待办），验证前扫描取点兜底。自动战斗开关不认色，只认按钮文字（OCR，唯一入口见 §执行规则2）。模板匹配只剩一个现役用途：wxprobe 全量模式用模板是否可见做结算门控（区分塔页红月），`wxrelogin`/`wxcharsel` 起点判定在用；模板持续 UNKNOWN 且窗口同比例，才说明真重排了，才走 wxrecrop 重裁。改阈值前先 `wxautostate -Debug`/`-Img` 采样；按钮 RGB 实测数据见 `coords.md`。
 
 ## 8. 低延迟执行
 
