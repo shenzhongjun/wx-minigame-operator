@@ -26,6 +26,10 @@ function TS { if ($Perf) { return " t=$([int]((Get-Date) - $T0).TotalSeconds)s" 
 # 模块化试点（2026-10-31）：probe/popup 同进程调用，省掉每次 0.5~0.9s 的进程启动。
 . (Join-Path $PSScriptRoot '_wxcommon.ps1')
 . (Join-Path $PSScriptRoot '_wxcore.ps1')
+# 模块化 P3b（2026-11-01）：策略层，提供单源 Invoke-WxGoldGuard。
+#   ⚠ 新增依赖文件后必须回来检查每条链路的 dot-source 清单——Parser 查不出「函数未定义」，
+#   自加载三件套的冒烟件也查不出，只有真实跑链路才暴露（2026-11-01 15:21 实机踩到）。
+. (Join-Path $PSScriptRoot '_wxflow.ps1')
 
 function Invoke-Sub([string]$script, [string[]]$argList) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
