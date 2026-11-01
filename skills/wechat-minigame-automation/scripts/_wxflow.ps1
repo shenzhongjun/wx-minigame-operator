@@ -58,13 +58,19 @@ function Invoke-WxGoldGuard {
         if (-not $AllowRevive) { return (New-WxGuardResult -Verdict "STOP" -Cls $cls) }
         # ⚠ 2026-11-01 v1.1.27（开发侧待办 9）：原为 `$null = Invoke-WxClick ...`，返回值被丢弃。
         #   点击被前台/最小窗守卫拒（ExitCode=7）或窗口丢失（ExitCode=1）时，原样返回 REVIVE，
-        #   调用方以为"已复活"→ 去重开自动战斗 → 实际角色还躺在地上，接着站桩再死一次。
-        #   现改为：点击成立才返回 REVIVE，否则红线 STOP 交人工。
+        #   调用方以为"已复活"→ 去重开自动战斗 + **扣掉一次复活配额**，而角色还躺在地上。
+        #   ⇒ 点击不成立时**不得**返回 REVIVE。
+        # ⚠⚠ 但也不能判 STOP（2026-11-01 22:2x 用户当场纠正，我第一版就是错在这里）：
+        #   管理新规 §七 三档契约——「0=达成 / 2=未达成但画面干净可原地重试 / 其它=STOP」。
+        #   点击被前台守卫拒是**暂时的、下一秒就可能恢复**（用户切窗口、窗口被抢焦点），
+        #   属于「可原地重试」，绝不是「红线停机」。判 STOP 的后果是：挂机时前台被抢一下，
+        #   整条 wxgrind 直接 exit 6 停掉——这是把自愈能力改没了。
+        #   ⇒ 返回 NONE（=弹窗没消掉，调用方继续等，下一轮探针会再判再点），Err 留痕供诊断。
         $c = $null
         try { $c = Invoke-WxClick -Steps "$($WX_REVIVE_X):$($WX_REVIVE_Y):1200" -Pid2 $Pid2 } catch { $c = $null }
         if (-not $c -or $c.ExitCode -ne 0) {
-            $code = if ($c) { $c.ExitCode } else { 'null' }
-            return (New-WxGuardResult -Verdict "STOP" -Cls $cls -Err "revive click failed exit=$code $($c.Err)")
+            $d = if ($c) { "exit=$($c.ExitCode) $($c.Err)" } else { "click returned null" }
+            return (New-WxGuardResult -Verdict "NONE" -Cls $cls -Err "revive click not effective: $d")
         }
         return (New-WxGuardResult -Verdict "REVIVE" -Cls $cls -Dismissed $true -Revived $true)
     }
@@ -76,12 +82,16 @@ function Invoke-WxGoldGuard {
 
     # ⚠ 2026-11-01 v1.1.27（开发侧待办 9）：同上，点击返回值必须检查。
     #   原来丢了返回值：守卫拒点（ExitCode=7，游戏不在前台且拉回失败）时仍返回 OK，
-    #   调用方（wxgrind 段1/段3、wxrelogin 阶段4）会以为弹窗已消 → 继续等 → 白等到超时才发现不对。
+    #   调用方（wxgrind 段1/段3、wxrelogin 阶段4）会以为弹窗已消。
+    # ⚠⚠ 但**不能**因为点击失败就判 STOP（用户 2026-11-01 22:2x 当场纠正）：
+    #   §七 三档契约里「点击未生效」属「可原地重试」，不属红线。前台被抢是暂时状态，
+    #   下轮探针会重判、重试点击；判 STOP 只会把一次可自愈的抖动升级成整链停机。
+    #   ⇒ 返回 NONE（=弹窗没消掉，继续等），Err 留痕供诊断。
     $c = $null
     try { $c = Invoke-WxClick -Steps "$($WX_GOLD_CONFIRM_X):$($WX_GOLD_CONFIRM_Y):800" -Pid2 $Pid2 } catch { $c = $null }
     if (-not $c -or $c.ExitCode -ne 0) {
-        $code = if ($c) { $c.ExitCode } else { 'null' }
-        return (New-WxGuardResult -Verdict "STOP" -Cls $cls -Err "confirm click failed exit=$code $($c.Err)")
+        $d = if ($c) { "exit=$($c.ExitCode) $($c.Err)" } else { "click returned null" }
+        return (New-WxGuardResult -Verdict "NONE" -Cls $cls -Err "confirm click not effective: $d")
     }
 
     if (-not $VerifyLogin) { return (New-WxGuardResult -Verdict "OK" -Cls $cls -Dismissed $true) }
