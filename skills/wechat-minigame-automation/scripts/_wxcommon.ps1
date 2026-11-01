@@ -124,13 +124,21 @@ function Get-ClientGeometry {
     $sx = $W / $WX_DESIGN_W
     $sy = ($H - $ch) / ($WX_DESIGN_H - $ch)
     $s = [math]::Min($sx, $sy)
+    # ⚠ 断言失败为什么「先打 STOP 再 exit」而不是 throw（2026-11-01 v1.1.27，开发侧待办 8）：
+    #   毛病从来不是「掀链」——几何异常时继续点就是瞎点，停机本来就对；毛病是**无声**：
+    #   原实现只写一行 ERR 就 exit 8，同进程化后这一 exit 直接把调用它的 wxgrind / wxrelogin
+    #   整条链掀掉，编排层只拿到一个 8，不知道窗口到底怎么了。
+    #   ⇒ 修法=停机行为不动、退出码 8 不动（管理新规 §七：8=窗口/几何异常，禁重试），只把原因喊成 STOP。
+    # ⚠ 曾经想用「throw + trap 统一兜底」，已 -File 实测否决：trap 写在 _wxcommon 里被 dot-source 时
+    #   **不作用于调用方脚本作用域**，异常照样冒到顶、退出码退化成 1（把 8 的语义丢了）。
+    #   要走 trap 得给 30 个脚本逐一加，成本远大于收益。实测件见 游戏\冒烟测试\_traptest-*.ps1（已删）。
     if (-not $NoAssert) {
         if ($Exact -and ($W -ne $WX_DESIGN_W -or $H -ne $WX_DESIGN_H)) {
-            Write-Output "ERR: client=$($W)x$($H) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize.ps1）"
+            Write-Output "STOP: client=$($W)x$($H) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize.ps1）-> exit 8"
             exit 8
         }
         if ($s -lt 0.40 -or $s -gt 2.0) {
-            Write-Output "ERR: client=$($W)x$($H) 缩放系数 $([math]::Round($s,3)) 超出 0.40-2.0，停机请用户核对窗口"
+            Write-Output "STOP: client=$($W)x$($H) 缩放系数 $([math]::Round($s,3)) 超出 0.40-2.0，停机请用户核对窗口 -> exit 8"
             exit 8
         }
     }

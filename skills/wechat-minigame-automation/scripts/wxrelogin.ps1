@@ -93,7 +93,7 @@ if ($st -eq "GOLD_DIALOG") {
         # probe 假金（金边装饰提示框欺骗）本就无真弹窗，应继续而非停机。
         "phase1 popup=NONE (probe false gold, event20) -> continue$(TS)"
     } elseif ($g.Verdict -ne "OK") {
-        "STOP: GOLD_DIALOG 分类=$($g.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）"; exit 9
+        "STOP: GOLD_DIALOG 分类=$($g.Cls)（顶号/涉钱/未知弹窗红线，绝不自动点）$(if ($g.Err) { " err=$($g.Err)" })"; exit 9
     } else {
         "phase1 confirm clicked cls=$($g.Cls)$(if ($AssumeGold) { ' (AssumeGold)' } else { '' })"
     }
@@ -156,7 +156,7 @@ while ((Get-Date) -lt $deadline) {
         $g = Invoke-WxGoldGuard -Pid2 $Pid2 -Cls $pi.Cls
         if ($g.Verdict -eq "OK") { $idleReclicked++; continue }
         if ($g.Verdict -eq "NONE") { "phase4 popup=NONE (probe false gold) -> keep waiting"; continue }
-        "STOP: GOLD_DIALOG 分类=$($g.Cls)（红线，绝不自动点）"; exit 9
+        "STOP: GOLD_DIALOG 分类=$($g.Cls)（红线，绝不自动点）$(if ($g.Err) { " err=$($g.Err)" })"; exit 9
     }
     Start-Sleep -Milliseconds 1000
 }

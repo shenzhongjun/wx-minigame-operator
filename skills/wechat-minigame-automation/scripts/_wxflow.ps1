@@ -16,8 +16,8 @@ $WX_REVIVE_X = 700
 $WX_REVIVE_Y = 513
 
 function New-WxGuardResult {
-    param([string]$Verdict = "STOP", [string]$Cls = "POPUP_UNKNOWN", [bool]$Dismissed = $false, [bool]$Revived = $false)
-    [pscustomobject]@{ Verdict = $Verdict; Cls = $Cls; Dismissed = $Dismissed; Revived = $Revived }
+    param([string]$Verdict = "STOP", [string]$Cls = "POPUP_UNKNOWN", [bool]$Dismissed = $false, [bool]$Revived = $false, [string]$Err = "")
+    [pscustomobject]@{ Verdict = $Verdict; Cls = $Cls; Dismissed = $Dismissed; Revived = $Revived; Err = $Err }
 }
 
 # 金弹窗处置（单源）
@@ -56,7 +56,16 @@ function Invoke-WxGoldGuard {
     #   点完返回 REVIVE 而非 OK：调用方拿到后**必须重开自动战斗**，否则角色继续站桩连环死。
     if ($cls -eq "POPUP_REVIVE") {
         if (-not $AllowRevive) { return (New-WxGuardResult -Verdict "STOP" -Cls $cls) }
-        $null = Invoke-WxClick -Steps "$($WX_REVIVE_X):$($WX_REVIVE_Y):1200" -Pid2 $Pid2
+        # ⚠ 2026-11-01 v1.1.27（开发侧待办 9）：原为 `$null = Invoke-WxClick ...`，返回值被丢弃。
+        #   点击被前台/最小窗守卫拒（ExitCode=7）或窗口丢失（ExitCode=1）时，原样返回 REVIVE，
+        #   调用方以为"已复活"→ 去重开自动战斗 → 实际角色还躺在地上，接着站桩再死一次。
+        #   现改为：点击成立才返回 REVIVE，否则红线 STOP 交人工。
+        $c = $null
+        try { $c = Invoke-WxClick -Steps "$($WX_REVIVE_X):$($WX_REVIVE_Y):1200" -Pid2 $Pid2 } catch { $c = $null }
+        if (-not $c -or $c.ExitCode -ne 0) {
+            $code = if ($c) { $c.ExitCode } else { 'null' }
+            return (New-WxGuardResult -Verdict "STOP" -Cls $cls -Err "revive click failed exit=$code $($c.Err)")
+        }
         return (New-WxGuardResult -Verdict "REVIVE" -Cls $cls -Dismissed $true -Revived $true)
     }
 
@@ -65,7 +74,15 @@ function Invoke-WxGoldGuard {
         return (New-WxGuardResult -Verdict "STOP" -Cls $cls)
     }
 
-    $null = Invoke-WxClick -Steps "$($WX_GOLD_CONFIRM_X):$($WX_GOLD_CONFIRM_Y):800" -Pid2 $Pid2
+    # ⚠ 2026-11-01 v1.1.27（开发侧待办 9）：同上，点击返回值必须检查。
+    #   原来丢了返回值：守卫拒点（ExitCode=7，游戏不在前台且拉回失败）时仍返回 OK，
+    #   调用方（wxgrind 段1/段3、wxrelogin 阶段4）会以为弹窗已消 → 继续等 → 白等到超时才发现不对。
+    $c = $null
+    try { $c = Invoke-WxClick -Steps "$($WX_GOLD_CONFIRM_X):$($WX_GOLD_CONFIRM_Y):800" -Pid2 $Pid2 } catch { $c = $null }
+    if (-not $c -or $c.ExitCode -ne 0) {
+        $code = if ($c) { $c.ExitCode } else { 'null' }
+        return (New-WxGuardResult -Verdict "STOP" -Cls $cls -Err "confirm click failed exit=$code $($c.Err)")
+    }
 
     if (-not $VerifyLogin) { return (New-WxGuardResult -Verdict "OK" -Cls $cls -Dismissed $true) }
 
@@ -143,7 +160,7 @@ function Wait-WxState {
                 elseif ($g.Verdict -eq "LOGIN") { return (New-WxWaitResult -Result "LOGIN" -State $st -Detail "cls=$($g.Cls)") }
                 elseif ($g.Verdict -eq "REVIVE") { return (New-WxWaitResult -Result "REVIVED" -State $st -Detail "cls=$($g.Cls)") }
                 elseif ($g.Verdict -eq "NONE") { $goldStreak = 0; $t += 1 }
-                else { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "cls=$($g.Cls)") }
+                else { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "cls=$($g.Cls)$(if ($g.Err) { " err=$($g.Err)" })") }
             }
             if (-not $NoSleep) { Start-Sleep -Seconds 1 }
             $t += 1
