@@ -154,16 +154,20 @@ function Invoke-WxProbe {
     $townVotes = ($nPower -ge 150) + ($nTownW -ge 50) + ($nShop -ge 30)
 
     # 左上角按钮文字模板匹配（AUTO_ON/AUTO_OFF 判定唯一来源）
+    # ⚠ 原名 $btnMatch（"按钮匹配上了"）——2026-11-01 用户指出这名字不伦不类：没说哪个按钮、
+    #   也没说匹配上代表什么。改名 $战斗按钮可见：**这个按钮只在战斗/副本界面出现**，
+    #   主城/世界地图/选角页都没有，所以它实际约等于「当前是不是战斗类画面」。
+    #   纯函数内局部变量，不进返回对象、无外部消费，改名零影响。
     $tpl = Import-WxBtnTemplates
     $live = Get-WxBmpMask $bmp $WX_BTN_X0 $WX_BTN_Y0
     $dOn = [math]::Round((Get-WxJaccard $live $tpl.On), 3)
     $dOff = [math]::Round((Get-WxJaccard $live $tpl.Off), 3)
-    $btnMatch = (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10))
+    $战斗按钮可见 = (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10))
 
     $bmp.Dispose()
     $state = "UNKNOWN"
-    if (-not $btnMatch -and $nGold -ge 450) { $state = "GOLD_DIALOG" }
-    elseif ($nSettle -ge 10 -and $btnMatch) { $state = "SETTLE_PAGE" }
+    if (-not $战斗按钮可见 -and $nGold -ge 450) { $state = "GOLD_DIALOG" }
+    elseif ($nSettle -ge 10 -and $战斗按钮可见) { $state = "SETTLE_PAGE" }
     elseif ($nSettle -ge 10 -and $nGold -lt 100) { $state = "TOWER_PAGE" }
     elseif ($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) { $state = "AUTO_ON" }
     elseif ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10) { $state = "AUTO_OFF" }
