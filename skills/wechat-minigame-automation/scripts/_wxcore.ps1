@@ -254,7 +254,13 @@ function Invoke-WxPopup {
     elseif (Test-WxKwHit $raw '其他设备') { $cls = "POPUP_RELOGIN" }
     elseif ((Test-WxKwHit $raw '未操作') -or (Test-WxKwHit $raw '重新登录')) { $cls = "POPUP_IDLE" }
     elseif (Test-WxKwHit $raw '扩展券') { $cls = "POPUP_EXTEND" }
-    elseif (Test-WxKwHit $raw '羽毛') { $cls = "POPUP_REVIVE" }
+    # 复活弹窗判据（2026-11-01 修正）：原判据是关键词「羽毛」→ **永不命中**，6 张历史死亡截图
+    #   （wx-verify\d26_*_death*.png）实测正文带稳定读出「确定复活吗？」，通篇没有「羽毛」二字，
+    #   于是全部落到兜底 POPUP_UNKNOWN（安全停机，但脚本分不清"死了"和"未知弹窗"）。
+    #   「羽毛」是复活消耗的道具名，写在按钮/图标区，不在正文带 (350,348)-(800,408) 内。
+    #   现判据取「复活」2 字（按 v1.1.9 N 字规则=零容差）：6/6 样本 raw 均含连续「复活」，命中稳定。
+    #   ⚠ 若将来出现只写「羽毛不足」而不含"复活"的变体弹窗，再按样本加 or 分支，禁止凭猜测加词。
+    elseif (Test-WxKwHit $raw '复活') { $cls = "POPUP_REVIVE" }
 
     $exitCode = 0
     if ($cls -eq "POPUP_RELOGIN" -or $cls -eq "POPUP_UNKNOWN") { $exitCode = 3 }
