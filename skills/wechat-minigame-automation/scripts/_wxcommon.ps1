@@ -15,6 +15,12 @@ $WX_BTN_X0 = 187; $WX_BTN_Y0 = 138  # 自动战斗按钮文字+图标区（2026-
 $WX_BTN_X1 = 247; $WX_BTN_Y1 = 183  #    整体右偏 9px/下偏 5px，导致白掩码错位、dist 恒 0.90+、战斗按钮可见恒假。
                                     #    新区=3 张真实截图白像素包围盒实测：战斗图 (189,139)-(247,183)、
                                     #    两张结算图 (187,138)-(247,183)。尺寸 61x46，模板已同步重裁（v1.1.27）
+# ---- 齿轮（设置）按钮区（2026-11-02 00:0x 用户令新增，作为"战斗画面"的第二证据）----
+# 用户口径：**只要是战斗画面，必然有齿轮 + 自动战斗这两个按钮**。
+# 齿轮是**单态**（自动战斗开/关时齿轮都一样），只需一张模板，比两态自动按钮少一半故障面。
+# 实测：战斗图 (203,70)-(231,98)、结算图 (203,71)-(230,98)，两图一致；主城同区无齿轮（是头像+绿徽章）。
+$WX_GEAR_X0 = 202; $WX_GEAR_Y0 = 69
+$WX_GEAR_X1 = 232; $WX_GEAR_Y1 = 99  # 31x31（包围盒 29x29 留 1px 容错）
                                     #    稀疏底部已作废。实离线验证: battleOFF dOff=0/dOn=0.46, battleON 反之）
 $WX_BTN_CLICK_X = 224; $WX_BTN_CLICK_Y = 181   # ⚠️ 已作废（v1.1.10 锚点=(215,172)）；仅存留勿用
 # 微信小游戏内嵌标题栏（客户区顶部白条「勇士之心」+胶囊按钮）：固定高度，不随窗口缩放。
@@ -344,8 +350,10 @@ function Get-DesignRegion {
 function Get-WxAssetsDir { Join-Path (Split-Path -Parent $PSScriptRoot) 'assets' }
 
 # ---- 自动战斗按钮模板匹配（唯一判据=按钮文字；与血量/tip/底色零关系）----
-function Get-WxBmpMask([System.Drawing.Bitmap]$b, [int]$ox, [int]$oy) {
-    $w = $WX_BTN_X1 - $WX_BTN_X0 + 1; $h = $WX_BTN_Y1 - $WX_BTN_Y0 + 1
+function Get-WxBmpMask([System.Drawing.Bitmap]$b, [int]$ox, [int]$oy, [int]$w = 0, [int]$h = 0) {
+    # w/h 省略时用自动战斗按钮区尺寸（历史调用点零改动）；传值则按指定尺寸取样（齿轮等其它模板用）
+    if ($w -le 0) { $w = $WX_BTN_X1 - $WX_BTN_X0 + 1 }
+    if ($h -le 0) { $h = $WX_BTN_Y1 - $WX_BTN_Y0 + 1 }
     $m = New-Object bool[] ($w * $h)
     for ($y = 0; $y -lt $h; $y++) { for ($x = 0; $x -lt $w; $x++) {
         $c = $b.GetPixel($ox + $x, $oy + $y)
@@ -364,8 +372,10 @@ function Get-WxJaccard($a, $b) {
 }
 function Import-WxBtnTemplates {
     $a = Get-WxAssetsDir
+    $gw = $WX_GEAR_X1 - $WX_GEAR_X0 + 1; $gh = $WX_GEAR_Y1 - $WX_GEAR_Y0 + 1
     @{
-        Off = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_off.png") 0 0
-        On  = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_on.png") 0 0
+        Off  = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_off.png") 0 0
+        On   = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_auto_on.png") 0 0
+        Gear = Get-WxBmpMask (New-Object System.Drawing.Bitmap "$a\btn_gear.png") 0 0 $gw $gh
     }
 }

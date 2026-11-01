@@ -12,12 +12,12 @@ function New-WxProbeResult {
         [int]$ExitCode = 0, [string]$Err = "", [string]$Client = "",
         [string]$State = "UNKNOWN", [string]$Page = "", [string]$Note = "",
         [int]$Gold = 0, [int]$Stam = 0, [int]$Settle = 0, [int]$Side = 0,
-        [double]$DistOn = 0, [double]$DistOff = 0, [int]$Hp = 0,
+        [double]$DistOn = 0, [double]$DistOff = 0, [double]$DistGear = -1, [int]$Hp = 0,
         [int]$Power = 0, [int]$Welfare = 0, [int]$Shop = 0, [int]$TownVotes = 0
     )
     [pscustomobject]@{
         ExitCode = $ExitCode; Err = $Err; Client = $Client; State = $State; Page = $Page; Note = $Note
-        Gold = $Gold; Stam = $Stam; Settle = $Settle; Side = $Side; DistOn = $DistOn; DistOff = $DistOff
+        Gold = $Gold; Stam = $Stam; Settle = $Settle; Side = $Side; DistOn = $DistOn; DistOff = $DistOff; DistGear = $DistGear
         Hp = $Hp; Power = $Power; Welfare = $Welfare; Shop = $Shop; TownVotes = $TownVotes
     }
 }
@@ -160,7 +160,14 @@ function Invoke-WxProbe {
     $live = Get-WxBmpMask $bmp $WX_BTN_X0 $WX_BTN_Y0
     $dOn = [math]::Round((Get-WxJaccard $live $tpl.On), 3)
     $dOff = [math]::Round((Get-WxJaccard $live $tpl.Off), 3)
-    $战斗按钮可见 = (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10))
+    # 齿轮（设置）按钮：**单态**，开/关自动战斗时都不变，只需一张模板。
+    # 2026-11-02 00:0x 用户令：只要是战斗画面必有「齿轮 + 自动战斗」两个按钮，
+    #   两路任一认到就算在战斗画面 → 少一半故障面（自动按钮是两态，坏一张模板就整套失效）。
+    $gw = $WX_GEAR_X1 - $WX_GEAR_X0 + 1; $gh = $WX_GEAR_Y1 - $WX_GEAR_Y0 + 1
+    $liveGear = Get-WxBmpMask $bmp $WX_GEAR_X0 $WX_GEAR_Y0 $gw $gh
+    $dGear = [math]::Round((Get-WxJaccard $liveGear $tpl.Gear), 3)
+    $齿轮可见 = ($dGear -le 0.60)
+    $战斗按钮可见 = ($齿轮可见 -or (($dOn -le 0.60 -and ($dOff - $dOn) -ge 0.10) -or ($dOff -le 0.60 -and ($dOn - $dOff) -ge 0.10)))
 
     $bmp.Dispose()
     $state = "UNKNOWN"
@@ -184,7 +191,7 @@ function Invoke-WxProbe {
     }
 
     return (New-WxProbeResult -ExitCode 0 -Client $clientStr -State $state -Page $page `
-            -Gold $nGold -Stam $nStam -Settle $nSettle -Side $nSide -DistOn $dOn -DistOff $dOff `
+            -Gold $nGold -Stam $nStam -Settle $nSettle -Side $nSide -DistOn $dOn -DistOff $dOff -DistGear $dGear `
             -Hp $nHp -Power $nPower -Welfare $nTownW -Shop $nShop -TownVotes $townVotes)
 }
 

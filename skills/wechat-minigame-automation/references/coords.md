@@ -153,7 +153,7 @@
 | 矩形 | 坐标 | 用途 | 消费方 |
 |---|---|---|---|
 | **OCR 任务区** | (175,158)-(275,195) F=12 | **判「自动战斗开没开」的唯一现行判据**：wxocr `-Task autobtn`，「取消自动」=ON /「自动战斗」=OFF，N=3 容错 | wxautoensure（全链唯一入口）、wxclick auto/autonow、wxautostate OCR 兜底 |
-| **模板文字带** | (187,138)-(247,183)（`_wxcommon $WX_BTN_*`，61×46；2026-11-01 23:3x 重标定） | wxprobe/wxautostate 模板匹配（Jaccard dOn/dOff）判 AUTO_ON/AUTO_OFF——**这两个输出态仅存诊断用途**（主判定已让位 OCR，v1.1.12 gated 退役）；但同源算出的 **战斗按钮可见（语义≈「当前是不是战斗类画面」）是 wxprobe 全量状态机的现役门控**：SETTLE_PAGE 判定要求结算面板按钮可见（区分毁灭之塔红月背景），**`wxrelogin`/`wxcharsel` 的起点判定走全量在用**（~~wxwait~~ 已删，零调用者）。wxautostate 消费方=wxrecrop 重裁验证/wxregress 离线回归（工具链诊断） | wxprobe（全量模式）、wxautostate（wxrecrop/wxregress 离线） |
+| **模板文字带** | 自动战斗 (187,138)-(247,183)（61×46）／**齿轮 (202,69)-(232,99)（31×31）** | wxprobe/wxautostate 模板匹配（Jaccard dOn/dOff）判 AUTO_ON/AUTO_OFF——**这两个输出态仅存诊断用途**（主判定已让位 OCR，v1.1.12 gated 退役）；**战斗画面判据（v1.1.28 起双路）= 齿轮可见 或 自动按钮可见**，任一命中即算；齿轮单态只有一张模板，主城同区是头像+绿徽章无齿轮（实测 DistGear 战斗 0~0.149 / 主城 0.982）。该判据是 wxprobe 全量状态机的现役门控：SETTLE_PAGE 判定要求战斗按钮可见（区分毁灭之塔红月背景），**`wxrelogin`/`wxcharsel` 的起点判定走全量在用**（~~wxwait~~ 已删，零调用者）。wxautostate 消费方=wxrecrop 重裁验证/wxregress 离线回归（工具链诊断） | wxprobe（全量模式）、wxautostate（wxrecrop/wxregress 离线） |
 
 - **点击锚点 (215,172)**（两态同位，素材图红框目验；旧锚点 (224,181) 已作废勿用）。
 - 关=「自动战斗」▶图标；开=「取消自动」⏸图标。**文字内容是唯一可靠判据**——按钮底色受地图背景染色、中央白字 tip 受特效干扰，均不可靠；血量与自动战斗零关系。
