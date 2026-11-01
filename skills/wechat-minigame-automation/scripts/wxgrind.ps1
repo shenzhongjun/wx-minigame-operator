@@ -10,13 +10,19 @@
 #   ⚠ 2026-11-01 修正：原「两次点击未进图」错报 exit 0（老口径 0=完成/重试失败），
 #     会导致编排层把失败当成功继续跑下一轮，已改 exit 2。
 $scripts = $PSScriptRoot
+# 模块化 P3（2026-11-01）：引入策略层，金弹窗处置单源。
+#   原 wxgrind.Invoke-PopupGuard 与 wxrelogin 阶段1/阶段4 三处各写一份，现收敛为 _wxflow.Invoke-WxGoldGuard。
+#   _wxcommon 的 Add-Type 有 'WXCommon' -as [type] 保护，重复 dot-source 安全，故 -AutoRetry 分支不再单独加载。
+#   代价：一次性加载约 0.5-1s（Add-Type 编译）；收益：Guard 内 OCR 引擎进程内复用（单次 3s → 0.25s）。
+. (Join-Path $PSScriptRoot '_wxcommon.ps1')
+. (Join-Path $PSScriptRoot '_wxcore.ps1')
+. (Join-Path $PSScriptRoot '_wxflow.ps1')
 # -RetryAttempts（2026-11-01 新增，默认 1）：段2「点再来一次」的内部重试次数。默认只点 1 次，
 #   失败 exit 2 交编排层按 §七 重试（重试权归编排层，避免内部×外部次数相乘误触）。
 # -AutoRetry（2026-10-25 新增）：每轮点击前自动扫描结算暗红按钮位置（复用 wxfarm 扫描带算法），
 #   替代人工按副本/布局传 RetryX/Y；扫描失败回退固定坐标。扫描带 BX=915±38, y225-445（设计坐标）。
 $script:AutoRetryReady = $false
 if ($AutoRetry) {
-    . (Join-Path $PSScriptRoot '_wxcommon.ps1')
     $script:grindHwnd = Find-GameWindow -Pid2 $Pid2
     if ($script:grindHwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     $null = Get-ClientGeometry $script:grindHwnd   # 提前暴露尺寸/比例异常
@@ -89,53 +95,27 @@ function Invoke-ProbeHeal {
     }
     return $st
 }
-function Invoke-Poke {
-    # 轮盘保活戳（用户方案：左下角轮盘任何画面绝对安全——用户在玩时戳一下也无妨，无需探测）
-    & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpoke.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 2
-}
-# 240s 节流（2026-11-01 用户定版，原 120s）：poke 本就无法重置游戏挂机计时（10-26 实锤，
-#   115s 间隔下挂机弹窗照样复现），加频无收益，拉长到 240s 纯降开销。
-#   阈值 235 = 标称 240s 留 5s 余量（原 115/120 同比例），抵消循环间隔与探针耗时。
-$script:PokeIntervalSec = 235
-$script:lastPoke = Get-Date
-function Invoke-PokeIfDue {
-    if (((Get-Date) - $script:lastPoke).TotalSeconds -ge $script:PokeIntervalSec) {
-        Invoke-Poke
-        $script:lastPoke = Get-Date
-    }
-}
+# ---- 轮盘保活 poke（2026-11-01 用户定版：**已废止**）----
+# 原 Invoke-Poke / Invoke-PokeIfDue（115s 节流，后改 240s）全部删除。废止依据（用户原话归纳）：
+#   ① poke 无法重置游戏挂机计时——2026-10-26 实测 115s 间隔下挂机弹窗照样复现；
+#   ② 自动战斗期间 poke 点了没有反应；
+#   ③ 非战斗场景（领体力等界面）本来也不需要戳。
+#   ⇒ 净效果只有每 2 分钟一次的 1.5-1.8s 子进程开销 + 抢前台，无任何收益。
+# 挂机弹窗改由段1/段3 的单源守卫 Invoke-WxGoldGuard 正常处置（分类 POPUP_IDLE → 点确定 → 复验）。
+# wxpoke.ps1 脚本本身保留为人工工具，链路不再调用。
 function Invoke-Click([string]$steps) {
     & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
-function Invoke-PopupGuard {
-    # 2026-10-26 新增：GOLD_DIALOG 持续时用 wxpopup 分类——
-    # POPUP_IDLE（挂机弹窗，红线必须点确定）→ 自动点 (700,513) 消掉；
-    #   然后**必须全量重探**：登录页会被 wxpopup 误分类为 IDLE（金色「进入游戏」钮污染签名，2026-10-26 实锤），
-    #   dismiss 后若是 LOGIN_PAGE = 会话已被踢 → 返回 "LOGIN"，调用方 exit 7 交操作员重登。
-    # 其余（顶号/扩展券/未知）→ 返回 "STOP"，调用方按红线停机。
-    # 返回：OK=已消弹窗可继续 / LOGIN=已被踢登录页 / STOP=红线停机
-    # 依据：wxpoke 实测无法重置游戏挂机计时（2026-10-26 圣殿挂机弹窗 115s 戳间隔下仍复现）。
-    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpopup.ps1" -Pid2 $Pid2 2>&1
-    $joined = ($out -join " ")
-    # 2026-10-28（事件20 移植）：wxpopup 判 NONE=画面无真弹窗（probe 被金边装饰提示框欺骗的假 GOLD）
-    #   → 返回 "NONE"，调用方继续等待/重探，不停机不点击。
-    if ($joined -match 'POPUP_NONE') { Write-Host "GUARD: wxpopup NONE (probe false gold, event20) -> continue"; return "NONE" }
-    if ($joined -match 'POPUP_IDLE') {
-        Write-Host "GUARD: POPUP_IDLE -> dismiss (700,513) then verify page"
-        Invoke-Click "700:513:600" | Out-Null
-        Start-Sleep -Seconds 2
-        $after = Invoke-ProbeHeal
-        # 2026-10-27：LOGIN_PAGE 探针退役，登录页身份=wxocr server 任务（用户定版 OCR 优先）
-        $loginOut = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxocr.ps1" -Pid2 $Pid2 -Task server 2>&1 | Out-String
-        if ($loginOut -match 'OCR=server=HIT') { Write-Host "GUARD: login page behind popup (wxocr server HIT) -> kicked"; return "LOGIN" }
-        return "OK"
-    }
-    Write-Host "GUARD: not idle popup ($($joined.Trim())) -> stop"
-    return "STOP"
-}
+# ---- 金弹窗处置（2026-11-01 P3 单源化）----
+# 原 Invoke-PopupGuard（本文件私有，70 行）已删除，改用 _wxflow.Invoke-WxGoldGuard。
+# 迁移对照（行为零改动）：
+#   POPUP_NONE（probe 假金，事件20）        → Verdict="NONE"  继续等
+#   POPUP_IDLE（挂机弹窗）                  → 点 (700,513) → 等 2s → server OCR 复验 → "OK" / "LOGIN"
+#   顶号/扩展券/未知                        → Verdict="STOP"  红线停机
+# 差异（均为纯收益）：① 同进程调用省 1.3s/次进程启动；② OCR 引擎复用 3s→0.25s；
+#   ③ 去掉一次 Invoke-ProbeHeal 无用调用（原代码取了 $after 却从未使用）。
 for ($i = 1; $i -le $Rounds; $i++) {
     "=== round $i/$Rounds ==="
-    Invoke-PokeIfDue   # 覆盖上一场战斗期间的等待时间
     # 1) 等结算页（Quick 轻量探针 1s 轮询；GOLD 需连续 3 次确认——战斗结束金色爆闪瞬时误报）
     $t = 0; $st = Invoke-ProbeHeal -Quick; $goldStreak = 0; $unkStreak = 0
     while ($st -ne "SETTLE_PAGE") {
@@ -143,15 +123,16 @@ for ($i = 1; $i -le $Rounds; $i++) {
         if ($st -eq "GOLD_DIALOG") {
             $goldStreak++
             if ($goldStreak -ge 3) {
-                $g = Invoke-PopupGuard
-                if ($g -eq "OK") {
+                # 2026-11-01 P3：单源守卫。VerifyLogin 判「点完是否已被踢到登录页」（本链必需）。
+                $g = Invoke-WxGoldGuard -Pid2 $Pid2 -VerifyLogin
+                if ($g.Verdict -eq "OK") {
                     $goldStreak = 0; $t += 3
                     # 不 continue：落回循环底部重探（dismiss 后画面已变，$st 需刷新）
-                } elseif ($g -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
-                elseif ($g -eq "NONE") { $goldStreak = 0; $t += 1
+                } elseif ($g.Verdict -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
+                elseif ($g.Verdict -eq "NONE") { $goldStreak = 0; $t += 1
                     # 事件20：probe 假金（装饰提示框），wxpopup 证实无真弹窗 → 继续等，不停机
                 }
-                else { "STOP: persistent gold dialog (death/idle/login)"; exit 6 }
+                else { "STOP: persistent gold dialog (death/idle/login), cls=$($g.Cls)"; exit 6 }
             }
             Start-Sleep -Seconds 1; $t += 1
         } elseif ($st -eq "STAMINA_POP") { "STOP: stamina popup"; exit 5 }
@@ -169,7 +150,6 @@ for ($i = 1; $i -le $Rounds; $i++) {
             Start-Sleep -Seconds 1; $t += 1
         }
         if ($t -ge $SettleWaitSec) { "STOP: settle wait timeout ($SettleWaitSec s), last=$st"; exit 2 }
-        Invoke-PokeIfDue
         $st = Invoke-ProbeHeal -Quick
     }
     # 2) 点再来一次
@@ -198,10 +178,10 @@ for ($i = 1; $i -le $Rounds; $i++) {
     if ($st -eq "ERR") { "STOP: probe error after enter"; exit 9 }
     if ($st -eq "GOLD_DIALOG") {
         # 入场即 GOLD：多为挂机弹窗压屏（wxpoke 无法重置挂机计时，2026-10-26 实锤）。
-        # IDLE → 自动 dismiss 后重探续跑；LOGIN=被踢 → exit 7；顶号/扩展券/未知 → 红线停机。
-        $g = Invoke-PopupGuard
-        if ($g -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
-        if ($g -ne "OK" -and $g -ne "NONE") { "STOP: gold dialog after enter"; exit 6 }
+        # 2026-11-01 P3：与段1 共用单源守卫，逻辑完全一致（原先此处重复写了一遍三连+分流）。
+        $g = Invoke-WxGoldGuard -Pid2 $Pid2 -VerifyLogin
+        if ($g.Verdict -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
+        if ($g.Verdict -ne "OK" -and $g.Verdict -ne "NONE") { "STOP: gold dialog after enter, cls=$($g.Cls)"; exit 6 }
         $st = Invoke-ProbeHeal
         "round ${i}: after guard state=$st"
         if ($st -eq "ERR") { "STOP: probe error after enter"; exit 9 }

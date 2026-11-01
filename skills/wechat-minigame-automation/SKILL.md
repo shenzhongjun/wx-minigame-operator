@@ -90,10 +90,11 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxrelogin.ps1` | **组合重登链（登录链唯一入口，`wxlogin` 已于 2026-10-31 退役并入本脚本）**：礼包弹窗先清场 → GOLD_DIALOG 经 wxpopup 分类（POPUP_IDLE 挂机自动点确定，其余顶号/涉钱/未知红线停机）→ server OCR 轮询登录页 → 进游戏 → 委托 wxcharsel 选角 → 三探针确认主城；已站主城直接返回 `ALREADY_TOWN`（不白等）。登录/选角阶段不弹礼包 | `-Char N -TownTimeoutSec -AssumeGold -Perf` |
 | `wxcharsel.ps1` | **选角专职（2026-10-27 新增，卡表单源）**：起始态自适应进选角页（主城点「选角」带3次重试）→ scr1w/scr2w 判屏 → 按需切屏复核 → 幂等双击目标卡；`-StartGame` 进游戏+town 终态确认，默认停选角页。卡表坐标见 coords.md「角色卡」行（脚本内单源）；**7/8 锁槽红线禁点** | `-Char 1..6 -StartGame` |
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
-| `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558） | `-Pid2 -CX/-CY/-DX/-DY` |
+| `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558）。**⚠️ 2026-11-01 已从所有链路废止**：poke 无法重置挂机计时（10-26 实锤），战斗中点无反应、非战斗场景也无必要，净耗 1.5-1.8s/次且抢前台。仅保留为人工工具，链路不再调用；挂机弹窗改由 `_wxflow.Invoke-WxGoldGuard` 处置 | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocr autobtn 任务 OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
 | `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、长宽比断言、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
 | `_wxcore.ps1` | **同进程模块库（2026-10-31 模块化）**：`Invoke-WxProbe`（状态探针）/ `Invoke-WxPopup`（弹窗分类）/ `Invoke-WxOcr`（OCR）/ `Invoke-WxClick`（点击）的函数本体，只返回对象不打印文本。链路 dot-source 后直接调函数，**不再起子进程**；`wxprobe/wxpopup/wxocr/wxclick` 四个 .ps1 已降为薄壳。**⚠️ OCR 引擎在进程内缓存，是全项目最大性能点：单次 3s→0.25s**（原实现每次子进程都重建 OcrEngine 加载中文模型约 2s；注释里的「250ms」只是识别本身）。接口契约见 `管理新规.md` §七；区域/阈值/判定顺序/Steps 语法与原脚本逐字一致，迁移前后离线逐图对比零漂移 | 改任一函数须同步核对对应薄壳 |
+| `_wxflow.ps1` | **策略层（2026-11-01 模块化 P3）**：回答「拿到这个状态该怎么办」，与 `_wxcore`（回答「画面是什么状态」）分层。当前含 `Invoke-WxGoldGuard`——金弹窗处置单源，取代原 `wxgrind.Invoke-PopupGuard` 与 `wxrelogin` 阶段1/阶段4 两份内联实现。返回 `Verdict` = `OK`（已消弹窗）/`NONE`（probe 假金，继续等）/`LOGIN`（点击后复验为登录页，须重登）/`STOP`（红线）。**不自己首判探针**，首判由调用方给；`-VerifyLogin` 控制点完是否复验登录页 | 依赖先 dot-source `_wxcommon` + `_wxcore` |
 | `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对标注截图库（`-ImgDir` 传入）断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
 | `wxwhitebox.ps1` | 白色像素包围盒诊断（模板文字区重标定用，杜绝目测缩放图） | `-Img -X0..` |
 | `wxenumwin.ps1` | 枚举进程全部可见窗口（标题/客户区/原点）——多窗口/尺寸异常排查 | `-Pid2` |
