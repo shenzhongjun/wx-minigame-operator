@@ -4,6 +4,36 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.1 --stat`（两版间文件差异）。
 
+## [1.1.22] - 2026-11-01
+
+**主题：wxgrind 模块化 P1~P5 —— 探针同进程（等结算近乎提速一倍）+ 状态机 + 守卫单源化；poke 全链废止**
+
+### 改动
+
+- **新增 `_wxflow.ps1`（策略层）**：回答「拿到这个状态该怎么办」，与 `_wxcore`（回答「画面是什么状态」）分层。含 `Invoke-WxGoldGuard`（金弹窗处置，返回 `Verdict`=OK/NONE/LOGIN/STOP，不自判探针，`-Cls` 可传已知分类免重复探）与 `Wait-WxState`（等状态状态机，返回 `Result`=OK/TIMEOUT/ERR/LOGIN/GOLD/STAMINA，内置 GOLD 与体力弹窗三连确认、UNKNOWN 十连全量深探、超时）。
+- **金弹窗守卫单源化**：原 `wxgrind.Invoke-PopupGuard`（70 行私有）与 `wxrelogin` 阶段1/阶段4 两份内联判断收敛为 `Invoke-WxGoldGuard` 一处。顺带修 `wxrelogin` 的 `POPUP_NONE` 处理——原先会走红线 STOP（假金误停机），现按假金继续。
+- **探针切同进程（本轮最大性能项）**：`wxgrind` 的 `Invoke-Probe` 由子进程 `wxprobe.ps1` 改为 `Invoke-WxProbe`。**实测修正：单次探针子进程约 1.2s（旧估计 0.3-0.5s 偏低三倍）**，因每次都要 `dot-source _wxcommon`（含 `Add-Type` 编译）+ 抓图 + 全区扫描；段1 名义「1s 轮询」实际 2.2s/轮，改后 1.2s/轮，**等结算页近乎提速一倍**。
+- **`Wait-WxState` 状态机**：`wxgrind` 段1 的内联 `while` + `goldStreak`/`unkStreak` 双计数器 + 四处 `exit` 收敛为一次状态机调用 + `switch`。判据与计数逻辑逐行照搬（含守卫 OK 时超时累加 `+3`、假金 `+1`）。
+- **`wxgrind.Invoke-ProbeHeal` 口径修正（D1 用户定版）**：**删除自动 `wxresize`**，改「ERR→等 1s→原地重探一次→仍 ERR 上报」。理由：几何层已把任意尺寸归一化到设计基准，只要客户区宽 ≥800 任何窗口都能用；`wxresize` 只能救「宽<800」一种，而那恰是用户主动缩小的结果，自动拉回属越权且每次多付 1.3s+。逻辑已固化进 `_wxcore.Invoke-WxProbeHeal`。
+- **段2「点再来一次」硬等 6s → 800ms**：点击后只等 800ms 让点击生效，就绪判定全交 `EnterWaitSec` 轮询；两次 attempt 也不重复硬等（失败说明点击没生效，不是等得不够）。
+- **新增 `-RetryAttempts`（默认 1）**：重试权归编排层，避免「内部 2 次 × 外部 3 次」相乘误触。用 `for` 而非 `foreach (1..N)`——PowerShell 的 `1..0` 会展开成 `(1,0)` 两元素，传 0 反而点两次。
+- **退出码校正**：段2 两次点击未进图原报 `exit 0`（老口径「0=完成/重试失败」），编排层会把失败当成功；改 `exit 2` 符合 §七 三档契约。
+- **结算按钮扫描固化 + 新增 `-Img` 离线验图**：`Find-WxRetryY`（纯算法，不碰窗口不管资源）+ `Resolve-WxRetryCoords`（取图+回退，返回对象 `{X,Y,Auto,Err}`）进 `_wxcore`，wxgrind 删私有约 50 行。判据零改动（扫描带 BX=915±25 三点采样 / y225-444 / 连续段≥10px）。**扫描逻辑此前只能实机试，现可用历史截图离线回归。**
+- **`STAMINA_POP` 加三连确认**：战斗中绿色技能特效/光环会偶发命中体力弹窗判据，导致 `exit 5` 误停机（圣殿-1 实机撞上，截图复核该帧 STAM=0 属瞬时命中）。改为连续 N 次确认（`-StaminaConfirmN` 默认 3），真弹窗持久必然连击成立，瞬时特效被过滤。
+- **轮盘保活 poke 全链废止（用户定版）**：删 `Invoke-Poke`/`Invoke-PokeIfDue` 及两处调用。依据：poke 无法重置挂机计时（10-26 实锤，115s 间隔下弹窗照样复现）、战斗中点没反应、非战斗场景也无必要。`wxpoke.ps1` 保留作人工工具，链路不再调用。
+- **文档**：`run-environment-pitfalls.md` 新增 §5 画面判读易错点（战斗中出现 `UNKNOWN`+`WORLD_MAP` 属正常 / 判结算页用 `-Quick` / `STAMINA` 可能瞬时误报及处置 / 复活弹窗当前需人工介入）；`coords.md` 死亡弹窗「立即复活」坐标 `(722,516)` → **`(700,513)`**（实机点击成功），旧值作废。
+
+### 验证
+
+- **`wxgrind` 结构**：**206 行 → 132 行**；子进程 **7 处 → 2 处**（仅剩 `wxclick` / `wxautoensure`，均属跨脚本契约）。
+- **`Wait-WxState` 离线单测 9/9**（注入探针模拟状态序列）：首探达标 / UNKNOWN 计数 / 体力弹窗连击确认 / **体力弹窗瞬闪 1 帧不误停** / 深探登录页 / 超时 / GOLD 三连 / 探针 ERR / goldStreak 归零。
+- **结算扫描离线验图 5/5**：三张独立来源的结算截图均 `Auto=True` → `(915,258)`；战斗页/选角页正确回退 `(936,269)`。实时路径 `-EnableScan` 394ms、不传参数 0ms 不起抓图、缺图回退带 Err。
+- **守卫分支映射 4/4**：`POPUP_RELOGIN`/`EXTEND`/`UNKNOWN` → STOP、`POPUP_NONE` → NONE，全部 `Dismissed=False`（确认未点击）。
+- **冒烟**：`-Pid2 999999` 两次探针场景 **5.2s → 2.7s**。
+- **实机重登**：`RELOGIN_OK state=TOWN_PAGE`；挂机弹窗起点 20.1s、真顶号弹窗 `-AssumeGold` 路径 18.8s、登录页起点 16.4s。
+- **实机三把圣殿（角色 2）**：段2 三次「再来一次」全部成功进图无失败；第 3 把 `EXIT=0` **9.2s**（结算页起点、自动战斗已开的场景，目前最快单轮）。
+- BOM + Parser：全部改动文件 0 错误；`wxdoclint` PASS（SKILL 174 行 / 路由 8/8 / 坐标泄漏 0）。
+
 ## [1.1.21] - 2026-11-01
 
 **主题：模块化落地（内核函数化 + 薄壳脚本）+ OCR 引擎进程内复用 —— 重登链 63.1s → 20.1s（-68%）**
