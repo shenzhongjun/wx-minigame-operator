@@ -4,6 +4,32 @@
 **发版流程定版**：改根目录文件 → 更新本文件（新增版本段落）→ `git commit` → `git tag -a vX.Y.Z -m "主题摘要"`。
 快捷查看：`git tag -n`（列出版本+主题）｜`git log v1.0.0..v1.1.0 --oneline`（两版间提交）｜`git diff v1.0.0 v1.1.1 --stat`（两版间文件差异）。
 
+## [1.1.26] - 2026-11-01
+
+**主题：修代码审查核实的两处算错项 —— 被踢登录页白等 90 秒的死分支 + GOLD/STAMINA 交替凑假三连**
+
+### 修复
+
+- **`Wait-WxState` 的「被踢登录页」深探是死分支**（审查二档 3，影响最大）：
+  - 原实现：UNKNOWN 连击 10 次后做一次深探，读 `$full -eq "LOGIN_PAGE"` 判登录页。
+  - **但 `Invoke-WxProbe` 从不产出 `LOGIN_PAGE`**——登录页像素判据 2026-10-27 已退役，这个字符串在 `_wxcore.ps1` 里一次都没出现过。所以那个 `if` 永远不成立：被踢回登录页时只会一路 `UNKNOWN`，耗满 `SettleWaitSec`（默认 90s）再 `exit 2`，而 `exit 2` 的语义是「可原地重试」，编排层会白跑约 4.5 分钟（90s × 重试 3 次）。
+  - 现改为 **server OCR 单判据**（登录页身份 =「巨龙山脉」，v1.1.5 定版），与 `Invoke-WxGoldGuard` 复验登录页用的是同一个判据。
+  - 注入探针路径**保留**（`-Probe` 返回 `LOGIN_PAGE` 即视为登录页），离线单测可测性不受影响；真实路径由反短路件单独覆盖（见验证）。
+- **STAMINA 分支漏清 `$goldStreak`**（审查二档 5，一行）：
+  - 原先 GOLD 分支会清 `$staminaStreak`，但 STAMINA 分支不清 `$goldStreak`，两边不对称。
+  - 画面在 `GOLD_DIALOG` 与 `STAMINA_POP` 之间来回闪（金色爆闪 + 绿色特效同时存在）时，序列 `GOLD,STAMINA,GOLD,STAMINA,GOLD` 会凑够 3 个「不连续」的金帧，误触守卫去点 `(700,513)`——三连确认的设计目的被削弱。
+  - 「连击」必须要求连续，任何一次别的状态都要归零，现已在 STAMINA 分支首行补 `$goldStreak = 0`。
+
+### 验证
+
+- 离线单测 **10/10**，新增用例「GOLD/STAMINA 交替不误触守卫」——**修复前该项必 FAIL**，能挡住回退。
+- 反短路件 **7/7**，新增 C 组「真实路径深探」：不注入探针、走真实 server OCR，当前在主城 → `TIMEOUT` 而非误判 `LOGIN`（若游戏真在登录页则应返回 `LOGIN`）。
+- `_wxflow.ps1` BOM + Parser 0 错误。
+
+### 未做（审查其余条目）
+
+- 待办 8/9/10 本版未动：`Get-ClientGeometry` 的 `exit 8` 会掀掉整条链、守卫路径无 try/catch 且丢弃点击返回值、`exit 9` 泛滥（wxcharsel 7 / wxrelogin 10）。已记入包外交接文档待办。
+
 ## [1.1.25] - 2026-11-01
 
 **主题：文档补充 —— 角色3 实刷暴露的两个判据/行为坑入档（代码零改动）**

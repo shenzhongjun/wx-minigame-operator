@@ -152,6 +152,11 @@ function Wait-WxState {
             #   原实现见一次就 return STAMINA，导致战斗中绿色技能特效/光环闪过一帧即误停机（圣殿-1 实机撞上，
             #   截图复核该帧 STAM=0，属瞬时命中）。真体力弹窗是持久状态，连击必然成立；瞬时特效则会被过滤。
             #   同 GOLD 三连确认思路（过滤战斗结束金色爆闪）。
+            #   ⚠ 2026-11-01 补 $goldStreak = 0（代码审查二档）：原先只有 GOLD 分支清 $staminaStreak、
+            #     STAMINA 分支不清 $goldStreak，两者不对称。画面在 GOLD_DIALOG 与 STAMINA_POP 之间来回闪
+            #     （金色爆闪 + 绿色特效同时存在）时，序列 GOLD,STAMINA,GOLD,STAMINA,GOLD 会凑够"三连"
+            #     误触守卫去点 (700,513)。真正的"连击"要求连续，任何一次别的状态都必须归零。
+            $goldStreak = 0
             $staminaStreak++
             if ($staminaStreak -ge $StaminaConfirmN) {
                 return (New-WxWaitResult -Result "STAMINA" -State $st -Detail "confirmed x$staminaStreak")
@@ -164,9 +169,24 @@ function Wait-WxState {
             if ($st -eq "UNKNOWN") {
                 $unkStreak++
                 if ($unkStreak -ge $UnknownDeepN) {
-                    # Quick 认不出登录页：UNKNOWN 持续 ~40s 才做一次全量探针（战斗中误触发仅多花一次全探）
-                    $full = & $probeCall $false
-                    if ($full -eq "LOGIN_PAGE") { return (New-WxWaitResult -Result "LOGIN" -State $full -Detail "deep probe") }
+                    # 深探：Quick 认不出登录页，UNKNOWN 持续 ~40s 才做一次深判（战斗中误触发只多花一次 OCR）
+                    # ⚠ 2026-11-01 修死分支（代码审查一档）：原实现读 `$full -eq "LOGIN_PAGE"`，但
+                    #   **Invoke-WxProbe 从不产出该状态**——登录页像素判据 2026-10-27 已退役，
+                    #   "LOGIN_PAGE" 这个字符串在 _wxcore 里根本不存在。所以那个 if 永远不成立：
+                    #   被踢登录页时只会一路 UNKNOWN 耗满 SettleWaitSec(90s) 再 exit 2，编排层还会当"可重试"。
+                    #   现改为 **server OCR 单判据**（登录页身份 = 「巨龙山脉」，v1.1.5 定版），
+                    #   与 Invoke-WxGoldGuard 复验登录页用的是同一个判据。
+                    $isLogin = $false
+                    if ($Probe) {
+                        # 测试注入路径：由注入探针返回 "LOGIN_PAGE" 表示登录页（保持离线可测）
+                        $full = & $Probe $false
+                        if ($full -eq "LOGIN_PAGE") { $isLogin = $true }
+                    } else {
+                        $o = $null
+                        try { $o = Invoke-WxOcr -Pid2 $Pid2 -Task server } catch { $o = $null }
+                        if ($o -and -not $o.Err -and $o.Hit) { $isLogin = $true }
+                    }
+                    if ($isLogin) { return (New-WxWaitResult -Result "LOGIN" -State "LOGIN_PAGE" -Detail "deep probe: server OCR hit") }
                     $unkStreak = 0
                 }
             } else { $unkStreak = 0 }
