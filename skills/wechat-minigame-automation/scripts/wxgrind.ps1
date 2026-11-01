@@ -1,10 +1,17 @@
-﻿param([int]$Rounds = 1, [int]$Pid2 = 0, [int]$RetryX = 936, [int]$RetryY = 269, [int]$SettleWaitSec = 90, [int]$EnterWaitSec = 25, [switch]$AutoRetry)
+﻿param([int]$Rounds = 1, [int]$Pid2 = 0, [int]$RetryX = 936, [int]$RetryY = 269, [int]$SettleWaitSec = 90, [int]$EnterWaitSec = 25, [int]$RetryAttempts = 1, [switch]$AutoRetry)
 # 固化刷本循环（2026-10-24 新增，替代 wxfarm 的通用扫描方案，语法0错误未实战）
 # 思路：不再扫描按钮位置——结算「再来一次」用固定坐标（圣殿两行布局实测 (936,269)），
 #       每步用 wxprobe 验证状态，异常即停。依赖 wxprobe/wxclick 同目录。
 # 流程/轮：等结算 → 点再来一次 → 验证离场 → (AUTO_OFF 时 gated 开自动) → 等下一结算
-# 退出码：0=完成/重试失败  2=结算等待超时  5=体力弹窗  6=金色弹窗(复活/挂机/登录)  3=自动战斗确保失败  7=会话被踢回登录页(操作员重登后续跑)
+# 退出码（管理新规 §七 三档契约，2026-11-01 校正）：
+#   0=本轮目标达成且已自证 | 2=未达成但画面干净可原地重试（结算超时 / 点击未进图）
+#   其它一律 STOP 禁止重试，细分码仅供诊断：3=自动战斗确保失败 5=体力弹窗 6=金弹窗未消(死亡/顶号/未知)
+#   7=被踢回登录页(交操作员重登) 9=探针故障
+#   ⚠ 2026-11-01 修正：原「两次点击未进图」错报 exit 0（老口径 0=完成/重试失败），
+#     会导致编排层把失败当成功继续跑下一轮，已改 exit 2。
 $scripts = $PSScriptRoot
+# -RetryAttempts（2026-11-01 新增，默认 1）：段2「点再来一次」的内部重试次数。默认只点 1 次，
+#   失败 exit 2 交编排层按 §七 重试（重试权归编排层，避免内部×外部次数相乘误触）。
 # -AutoRetry（2026-10-25 新增）：每轮点击前自动扫描结算暗红按钮位置（复用 wxfarm 扫描带算法），
 #   替代人工按副本/布局传 RetryX/Y；扫描失败回退固定坐标。扫描带 BX=915±38, y225-445（设计坐标）。
 $script:AutoRetryReady = $false
@@ -66,14 +73,19 @@ function Invoke-Probe {
 }
 function Invoke-ProbeHeal {
     param([switch]$Quick)
-    # 2026-10-26 更新：客户区 1-3px 级漂移已由设计坐标换算吸收，探针不再因尺寸微变 ERR。
-    # 保留 ERR 自愈，仅兜底长宽比异常/窗口抖动；真实丢窗时 wxresize 也会失败 → 复测仍 ERR → 调用方停机，不掩盖真故障。
+    # 2026-11-01 定版（用户口径，D1 批准）：**不再自动 wxresize**。
+    #   理由：几何层 Get-DesignBitmap 已把任意尺寸归一化到设计基准，只要客户区宽 >=800 任何窗口都能用；
+    #         wxresize 只能救「宽<800」这一种，而那恰是用户主动缩小的结果——自动拉回属越权，
+    #         且每次多付 1.3s+（子进程启动 + 800ms 硬等 + resize 动作）。
+    #   ERR 后只原地重探一次，覆盖前台抖动 / 子进程偶发异常；仍 ERR 交调用方停机，不掩盖真故障。
     $st = Invoke-Probe -Quick:$Quick
     if ($st -eq "ERR") {
-        "HEAL: probe ERR -> wxresize -> reprobe"
-        & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxresize.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 1
-        Start-Sleep -Milliseconds 800
+        # ⚠ 必须 Write-Host：裸字符串会被 $st = Invoke-ProbeHeal 吸收进返回值，污染状态值
+        #   （2026-11-01 冒烟实测：原写法导致 HEAL 提示不输出，且 $st 变成数组）
+        Write-Host "HEAL: probe ERR -> reprobe once (no resize)"
+        Start-Sleep -Milliseconds 1000
         $st = Invoke-Probe -Quick:$Quick
+        if ($st -eq "ERR") { Write-Host "HEAL: reprobe still ERR -> give up (交调用方停机)" }
     }
     return $st
 }
@@ -81,10 +93,13 @@ function Invoke-Poke {
     # 轮盘保活戳（用户方案：左下角轮盘任何画面绝对安全——用户在玩时戳一下也无妨，无需探测）
     & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxpoke.ps1" -Pid2 $Pid2 2>&1 | Select-Object -Last 2
 }
-# 120s 节流（用户 2026-10-24 定版：120s 一戳足够避开挂机弹窗，无需更频）
+# 240s 节流（2026-11-01 用户定版，原 120s）：poke 本就无法重置游戏挂机计时（10-26 实锤，
+#   115s 间隔下挂机弹窗照样复现），加频无收益，拉长到 240s 纯降开销。
+#   阈值 235 = 标称 240s 留 5s 余量（原 115/120 同比例），抵消循环间隔与探针耗时。
+$script:PokeIntervalSec = 235
 $script:lastPoke = Get-Date
 function Invoke-PokeIfDue {
-    if (((Get-Date) - $script:lastPoke).TotalSeconds -ge 115) {
+    if (((Get-Date) - $script:lastPoke).TotalSeconds -ge $script:PokeIntervalSec) {
         Invoke-Poke
         $script:lastPoke = Get-Date
     }
@@ -157,21 +172,27 @@ for ($i = 1; $i -le $Rounds; $i++) {
         Invoke-PokeIfDue
         $st = Invoke-ProbeHeal -Quick
     }
-    # 2) 点再来一次（两次机会）
+    # 2) 点再来一次
+    #    D2/D3（2026-11-01 用户定版）：点击后只等 800ms 让点击生效，就绪判定全交给紧随其后的
+    #      EnterWaitSec 轮询；若要多试一次，第二次也**不重复硬等**——第一次失败说明点击没生效，不是等得不够。
+    #    D4（选 A）：重试权归编排层。内部默认只点 1 次，失败 exit 2 交外部按 §七 最多重试 3 次，
+    #      避免「内部 2 次 × 外部 3 次 = 连续 6 次点击」误触。需要内部多试请显式 -RetryAttempts N。
     $entered = $false
-    foreach ($attempt in 1..2) {
+    #    注意：用 for 而非 foreach (1..$RetryAttempts)——PS 的 1..0 会展开成 (1,0) 两元素，
+    #    传 0 反而点两次。for 在 <=0 时天然不循环，直接落到 exit 2。
+    for ($attempt = 1; $attempt -le $RetryAttempts; $attempt++) {
         $rc = Resolve-RetryCoords
-        "round ${i}: click retry (attempt $attempt, target=$rc)"
+        "round ${i}: click retry (attempt $attempt/$RetryAttempts, target=$rc)"
         $rcParts = $rc.Split(',')
-        Invoke-Click "$($rcParts[0]):$($rcParts[1]):6000" | Out-Null
+        Invoke-Click "$($rcParts[0]):$($rcParts[1]):800" | Out-Null
         $t = 0; $st = Invoke-ProbeHeal
         while ($st -eq "SETTLE_PAGE" -and $t -lt $EnterWaitSec) {
             Start-Sleep -Seconds 1; $t += 1; $st = Invoke-ProbeHeal
         }
         if ($st -ne "SETTLE_PAGE") { $entered = $true; break }
-        "round ${i}: still settle after attempt $attempt"
+        "round ${i}: still settle after attempt $attempt (waited ${EnterWaitSec}s)"
     }
-    if (-not $entered) { "STOP: retry clicks failed twice (round $i)"; exit 0 }
+    if (-not $entered) { "STOP: retry click not entered ($RetryAttempts attempt(s), round $i) -> exit 2 (交编排层重试)"; exit 2 }
     # 3) 入场确认 + 自动战斗
     "round ${i}: entered, state=$st"
     if ($st -eq "ERR") { "STOP: probe error after enter"; exit 9 }
