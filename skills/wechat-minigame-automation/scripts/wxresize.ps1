@@ -10,7 +10,7 @@
 
 $hwnd = Find-GameWindow -Pid2 $Pid2
 if ($hwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
-$geo = Get-ClientGeometry $hwnd -NoAssert
+$geo = Get-ClientGeometry $hwnd
 "before: client=$($geo.W)x$($geo.H) origin=$($geo.OX),$($geo.OY)"
 
 $tw = if ($ClientW -gt 0) { $ClientW } else { $WX_CLIENT_W }
@@ -37,7 +37,7 @@ $ok = [WXCommon]::SetWindowPos($hwnd, [IntPtr]::Zero, $wr.L, $wr.T, $winW, $winH
 if (-not $ok) { "ERR: SetWindowPos failed"; exit 2 }
 Start-Sleep -Milliseconds 800
 
-$geo2 = Get-ClientGeometry $hwnd -NoAssert
+$geo2 = Get-ClientGeometry $hwnd
 "after: client=$($geo2.W)x$($geo2.H) origin=$($geo2.OX),$($geo2.OY) (target ${tw}x${th})"
 if ([math]::Abs($geo2.W - $tw) -le 2 -and [math]::Abs($geo2.H - $th) -le 2) {
     "RESIZE_OK: 客户区已回到目标尺寸±2px（相对坐标自动换算，无需重标定）"

@@ -92,7 +92,7 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | `wxclaim.ps1` | 商城领奖链（**禁盲跑**，见 incidents 事件16） | `-Pid2` |
 | `wxpoke.ps1` | 轮盘保活戳（按下→拖→回→松；轮盘中心 210,558）。**⚠️ 2026-11-01 起废止，各链路不再调用**：poke 无法重置挂机计时（10-26 实锤，戳了照样弹），战斗中点它没反应，非战斗场景也无必要。仅保留作人工工具；防掉线请靠挂机弹窗自动处置 | `-Pid2 -CX/-CY/-DX/-DY` |
 | `wxautostate.ps1` | 按钮状态判定器（模板匹配核心，-Img 离线；UNKNOWN 且该区有文字时自动调 wxocr autobtn 任务 OCR 兜底，`-NoOcr` 关闭） | `-Pid2 -Img -NoOcr` |
-| `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、缩放系数断言（S 须在 0.40~2.0，仅防窗口被拖到极端）、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
+| `_wxcommon.ps1` | **公共库（单一真相源）**：设计坐标常量（1138×708/按钮区/点击点）、标题优先窗口查找（pid 0=自动发现）、等比换算（`Get-ClientGeometry`/`ConvertTo-ScreenPoint`，**不做任何尺寸断言、任意窗口尺寸都算**）、截图归一化（`Get-DesignBitmap`/`Get-DesignRegion`）、模板加载/掩码/Jaccard；交互脚本全部 dot-source，禁再复制样板 | 改后必跑 wxregress ⚠️暂停中（2026-10-26 用户裁定：清单 AI 标注待人工核验） |
 | `_wxcore.ps1` | **同进程模块库（2026-10-31 模块化）**：`Invoke-WxProbe`（状态探针）/ `Invoke-WxPopup`（弹窗分类）/ `Invoke-WxOcr`（OCR）/ `Invoke-WxClick`（点击）的函数本体，只返回对象不打印文本。链路 dot-source 后直接调函数，**不再起子进程**；`wxprobe/wxpopup/wxocr/wxclick` 四个 .ps1 已降为薄壳。**⚠️ OCR 引擎在进程内缓存，是全项目最大性能点：单次 3s→0.25s**（原实现每次子进程都重建 OcrEngine 加载中文模型约 2s；注释里的「250ms」只是识别本身）。接口契约见 `管理新规.md` §七；区域/阈值/判定顺序/Steps 语法与原脚本逐字一致，迁移前后离线逐图对比零漂移 | 改任一函数须同步核对对应薄壳 |
 | `_wxflow.ps1` | **策略层**：回答「拿到这个状态该怎么办」，与 `_wxcore`（回答「画面是什么状态」）分层。含 ①`Invoke-WxGoldGuard` 金弹窗处置（分类 → 按需点确定 → 可选复验登录页），返回 `Verdict`=OK/NONE/LOGIN/STOP，不自判探针，`-Cls` 可传已知分类；②`Wait-WxState` 等状态状态机，返回 `Result`=OK/TIMEOUT/ERR/LOGIN/GOLD/STAMINA，内置 GOLD 与体力弹窗三连确认（过滤瞬时误报）、UNKNOWN 十连全量深探、超时 | 依赖先 dot-source `_wxcommon` + `_wxcore` |
 | `wxregress.ps1` | **离线回归测试**：按 `_regress-manifest.csv` 对标注截图库（`-ImgDir` 传入）断言 BTN_STATE/STATE（已知误报锁行为）；重裁模板/改阈值/改公共库后必跑，⚠️ **暂停使用**（2026-10-26 用户裁定：清单 AI 标注未经人工核验，恢复前以实机探针+截图目验替代），全过才算改动成立 | `-Manifest -ImgDir` |
@@ -153,7 +153,6 @@ description: 勇士之心自动化作业手册（操作方法与排错知识源�
 | 点击落进用户其它窗口 | SetForegroundWindow 被前台锁拦截 | wxclick/wxpoke 已带前台守卫（拒点）；复现→停手 |
 | 按钮模板全 UNKNOWN（dist 双高） | 按钮被遮挡/特效扫过/真实布局重排 | wxshot 人工核对；同比例尺寸下仍持续 UNKNOWN 才重裁模板（单纯尺寸变化已由换算吸收） |
 | **OCR 任务区整区读空（raw=[]），页面内容目视正常** | **画布垂直居中漂移/区域边距过紧（事件21）** | 同图宽带扫描定位文字真实位置再重标区域；根治机制（CANVASTOP）见 coords.md 权威表述 |
-| 脚本报 `STOP: client=… 缩放系数不符`（退出码 8，极少见） | 窗口被拖到**极端**大小（缩放系数超出 0.40~2.0），坐标换算会失真。**尺寸本身不是故障**——宽 ≥800 的任意尺寸都能正常跑，抓图与坐标换算都与窗口无关 | 把窗口拉回正常大小即可，**不需要跑 wxresize**（它是可选维护工具，不是故障处置）；仍异常→停手问用户 |
 | 点了没反应、光标不在预期位置 | delta 失效/窗口被移动 | 重新校准（读最新 origin） |
 | 光标在按钮上没反应 | 热区偏移 | 下移 +30~50px 重试一次 |
 | 首点无效之后正常 | 首点只激活窗口 | 先点标题栏聚焦 |

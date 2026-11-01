@@ -17,7 +17,7 @@ if ($OX -lt 0) {
     if ($hwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
     # 前台守卫（todo 第3项，2026-10-27 接线）：不在前台先拉回，防抓到旧画面
     if (-not (Confirm-WxForeground $hwnd 'shot')) { "ERR: game not foreground，抓图拒绝（防假数据）"; exit 7 }
-    $geo = Get-ClientGeometry $hwnd -NoAssert   # 诊断工具：只报尺寸不强断言
+    $geo = Get-ClientGeometry $hwnd
     $b = Get-DesignBitmap $geo -Raw:$Raw
     $W = $b.Width; $H = $b.Height
     "anchored origin=$($geo.OX),$($geo.OY) size=${W}x$H scale=$([math]::Round($geo.S,4))$(if ($Raw) { ' raw' } else { ' design' })"
