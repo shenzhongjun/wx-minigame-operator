@@ -117,7 +117,7 @@ function Find-GameWindow {
 #   wxocr -Task     → 在归一化设计位图上裁剪，任务区域=设计坐标，无需任何换算。
 # ═══════════════════════════════════════════════════════════════════
 function Get-ClientGeometry {
-    param([IntPtr]$h, [switch]$NoAssert, [switch]$Exact)
+    param([IntPtr]$h, [switch]$NoAssert)
     $cr = New-Object WXCommon+RECT; [WXCommon]::GetClientRect($h, [ref]$cr) | Out-Null
     $pt = New-Object WXCommon+POINT; $pt.X = 0; $pt.Y = 0; [WXCommon]::ClientToScreen($h, [ref]$pt) | Out-Null
     $W = $cr.R; $H = $cr.B; $ch = $WX_CHROME_H
@@ -128,17 +128,21 @@ function Get-ClientGeometry {
     #   毛病从来不是「掀链」——几何异常时继续点就是瞎点，停机本来就对；毛病是**无声**：
     #   原实现只写一行 ERR 就 exit 8，同进程化后这一 exit 直接把调用它的 wxgrind / wxrelogin
     #   整条链掀掉，编排层只拿到一个 8，不知道窗口到底怎么了。
-    #   ⇒ 修法=停机行为不动、退出码 8 不动（管理新规 §七：8=窗口/几何异常，禁重试），只把原因喊成 STOP。
+    #   ⇒ 修法=停机行为不动、退出码 8 不动（管理新规 §七：非 0/2 一律 STOP 禁重试），只把原因喊成 STOP。
     # ⚠ 曾经想用「throw + trap 统一兜底」，已 -File 实测否决：trap 写在 _wxcommon 里被 dot-source 时
     #   **不作用于调用方脚本作用域**，异常照样冒到顶、退出码退化成 1（把 8 的语义丢了）。
-    #   要走 trap 得给 30 个脚本逐一加，成本远大于收益。实测件见 游戏\冒烟测试\_traptest-*.ps1（已删）。
+    #   要走 trap 得给 30 个脚本逐一加，成本远大于收益。
+    # ⚠⚠ 2026-11-01 22:2x 用户当场纠正，原 -Exact 开关已删（保留此注释防复发）：
+    #   「必须精确等于 1138x708（去跑 wxresize）」这个口径是**错的**，v1.1.2 几何层重构后
+    #   任意窗口尺寸都能跑——画布等比缩放 + CANVASTOP 归一化，抓图与坐标换算都与窗口无关。
+    #   真实守卫只有两条，各管各的：
+    #     ① 宽 < 800 → Test-WxMinClientW 拦，返回 ExitCode 7（不是 8），小窗 OCR 读空敏感区；
+    #     ② 缩放系数超出 0.40~2.0 → 这里的 exit 8。这是窗口被拖到**极端**大小才可能发生
+    #        （宽 800 时 S≈0.70，离 0.40 还很远；下界实际被 ① 覆盖，只有上界 2.0 有独立意义）。
+    #   ⇒ 文案里**不许再出现 wxresize**：那是可选维护工具，不是故障处置步骤。
     if (-not $NoAssert) {
-        if ($Exact -and ($W -ne $WX_DESIGN_W -or $H -ne $WX_DESIGN_H)) {
-            Write-Output "STOP: client=$($W)x$($H) 需精确等于设计尺寸 $($WX_DESIGN_W)x$($WX_DESIGN_H)（维护工具请先跑 wxresize.ps1）-> exit 8"
-            exit 8
-        }
         if ($s -lt 0.40 -or $s -gt 2.0) {
-            Write-Output "STOP: client=$($W)x$($H) 缩放系数 $([math]::Round($s,3)) 超出 0.40-2.0，停机请用户核对窗口 -> exit 8"
+            Write-Output "STOP: client=$($W)x$($H) 缩放系数 $([math]::Round($s,3)) 超出 0.40-2.0（窗口被拖到极端大小，坐标换算会失真），把窗口调到正常尺寸即可（宽 ≥800、任意尺寸都能跑）-> exit 8"
             exit 8
         }
     }
