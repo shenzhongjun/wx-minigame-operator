@@ -86,6 +86,7 @@ function Wait-WxState {
         [switch]$GoldGuard,          # GOLD 连击达阈值后走单源守卫
         [switch]$VerifyLogin,        # 守卫点完复验登录页
         [int]$GoldConfirmN = 3,      # GOLD 连击确认次数（战斗结束金闪瞬时误报）
+        [int]$StaminaConfirmN = 3,   # 体力弹窗连击确认次数（战斗中绿色特效瞬时误报，2026-11-01 实机撞上）
         [int]$UnknownDeepN = 10,     # UNKNOWN 连续多少次后做一次全量探针验踢线
         [switch]$NoSleep,            # 测试用：跳过 sleep
         [scriptblock]$Probe = $null  # 测试用：注入探针（签名 { param($quick) -> 状态字符串 }）
@@ -98,12 +99,13 @@ function Wait-WxState {
         return $r.State
     }.GetNewClosure()
 
-    $t = 0; $goldStreak = 0; $unkStreak = 0
+    $t = 0; $goldStreak = 0; $unkStreak = 0; $staminaStreak = 0
     $st = & $probeCall $true
     while ($st -ne $Target) {
         if ($st -eq "ERR") { return (New-WxWaitResult -Result "ERR" -State $st -Detail "probe failed") }
 
         if ($st -eq "GOLD_DIALOG") {
+            $staminaStreak = 0
             $goldStreak++
             if ($goldStreak -ge $GoldConfirmN) {
                 if (-not $GoldGuard) { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "gold dialog, guard disabled") }
@@ -116,9 +118,19 @@ function Wait-WxState {
             if (-not $NoSleep) { Start-Sleep -Seconds 1 }
             $t += 1
         } elseif ($st -eq "STAMINA_POP") {
-            return (New-WxWaitResult -Result "STAMINA" -State $st)
+            # 2026-11-01：体力弹窗要求**连续 N 次确认**才停。
+            #   原实现见一次就 return STAMINA，导致战斗中绿色技能特效/光环闪过一帧即误停机（圣殿-1 实机撞上，
+            #   截图复核该帧 STAM=0，属瞬时命中）。真体力弹窗是持久状态，连击必然成立；瞬时特效则会被过滤。
+            #   同 GOLD 三连确认思路（过滤战斗结束金色爆闪）。
+            $staminaStreak++
+            if ($staminaStreak -ge $StaminaConfirmN) {
+                return (New-WxWaitResult -Result "STAMINA" -State $st -Detail "confirmed x$staminaStreak")
+            }
+            if (-not $NoSleep) { Start-Sleep -Seconds 1 }
+            $t += 1
         } else {
             $goldStreak = 0
+            $staminaStreak = 0
             if ($st -eq "UNKNOWN") {
                 $unkStreak++
                 if ($unkStreak -ge $UnknownDeepN) {
