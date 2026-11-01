@@ -62,3 +62,78 @@ function Invoke-WxGoldGuard {
     }
     return (New-WxGuardResult -Verdict "OK" -Cls $cls -Dismissed $true)
 }
+
+# ================= 等状态状态机（P5b，2026-11-01 从 wxgrind 段1 内联循环抽象）=================
+# 原 wxgrind 段1：手工 while + goldStreak/unkStreak 两个计数器 + 四处出口。
+# 抽象后判据与计数器行为**逐行照搬**，只是把「exit 码」换成返回 Result 交调用方决定。
+# Result 取值：
+#   OK      已到目标状态
+#   TIMEOUT 超时（画面干净，可重试）
+#   ERR     探针故障（STOP）
+#   LOGIN   被踢回登录页（需重登）
+#   GOLD    金弹窗未消/红线（STOP）
+#   STAMINA 体力弹窗（STOP）
+function New-WxWaitResult {
+    param([string]$Result = "OK", [string]$State = "", [string]$Detail = "")
+    [pscustomobject]@{ Result = $Result; State = $State; Detail = $Detail }
+}
+
+function Wait-WxState {
+    param(
+        [int]$Pid2 = 0,
+        [string]$Target = "SETTLE_PAGE",
+        [int]$TimeoutSec = 90,
+        [switch]$GoldGuard,          # GOLD 连击达阈值后走单源守卫
+        [switch]$VerifyLogin,        # 守卫点完复验登录页
+        [int]$GoldConfirmN = 3,      # GOLD 连击确认次数（战斗结束金闪瞬时误报）
+        [int]$UnknownDeepN = 10,     # UNKNOWN 连续多少次后做一次全量探针验踢线
+        [switch]$NoSleep,            # 测试用：跳过 sleep
+        [scriptblock]$Probe = $null  # 测试用：注入探针（签名 { param($quick) -> 状态字符串 }）
+    )
+    $probeCall = {
+        param($q)
+        if ($Probe) { return (& $Probe $q) }
+        $r = Invoke-WxProbeHeal -Pid2 $Pid2 -Quick:$q
+        if ($r.Err) { return "ERR" }
+        return $r.State
+    }.GetNewClosure()
+
+    $t = 0; $goldStreak = 0; $unkStreak = 0
+    $st = & $probeCall $true
+    while ($st -ne $Target) {
+        if ($st -eq "ERR") { return (New-WxWaitResult -Result "ERR" -State $st -Detail "probe failed") }
+
+        if ($st -eq "GOLD_DIALOG") {
+            $goldStreak++
+            if ($goldStreak -ge $GoldConfirmN) {
+                if (-not $GoldGuard) { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "gold dialog, guard disabled") }
+                $g = Invoke-WxGoldGuard -Pid2 $Pid2 -VerifyLogin:$VerifyLogin
+                if ($g.Verdict -eq "OK") { $goldStreak = 0; $t += 3 }
+                elseif ($g.Verdict -eq "LOGIN") { return (New-WxWaitResult -Result "LOGIN" -State $st -Detail "cls=$($g.Cls)") }
+                elseif ($g.Verdict -eq "NONE") { $goldStreak = 0; $t += 1 }
+                else { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "cls=$($g.Cls)") }
+            }
+            if (-not $NoSleep) { Start-Sleep -Seconds 1 }
+            $t += 1
+        } elseif ($st -eq "STAMINA_POP") {
+            return (New-WxWaitResult -Result "STAMINA" -State $st)
+        } else {
+            $goldStreak = 0
+            if ($st -eq "UNKNOWN") {
+                $unkStreak++
+                if ($unkStreak -ge $UnknownDeepN) {
+                    # Quick 认不出登录页：UNKNOWN 持续 ~40s 才做一次全量探针（战斗中误触发仅多花一次全探）
+                    $full = & $probeCall $false
+                    if ($full -eq "LOGIN_PAGE") { return (New-WxWaitResult -Result "LOGIN" -State $full -Detail "deep probe") }
+                    $unkStreak = 0
+                }
+            } else { $unkStreak = 0 }
+            if (-not $NoSleep) { Start-Sleep -Seconds 1 }
+            $t += 1
+        }
+
+        if ($t -ge $TimeoutSec) { return (New-WxWaitResult -Result "TIMEOUT" -State $st) }
+        $st = & $probeCall $true
+    }
+    return (New-WxWaitResult -Result "OK" -State $st)
+}

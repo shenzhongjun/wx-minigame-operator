@@ -31,33 +31,21 @@ if ($AutoRetry) {
 # 原 Find-RetryY / Resolve-RetryCoords（本文件私有，依赖 $script:grindHwnd）已删除。
 # 现用 _wxcore.Find-WxRetryY（纯算法）/ Resolve-WxRetryCoords（取图+回退，支持 -Img 离线验图）。
 # 判据、扫描带（BX=915±25 / y225-444 / 连续段>=10px）、回退逻辑全部逐字照搬，零漂移。
-function Invoke-Probe {
-    param([switch]$Quick)
-    # 2026-10-26 修复：原 @q 字符串展开把 "-Quick"/"" 绑定到 wxprobe 首位置参数 [int]$Pid2 → 绑定错误秒退 → ERR 停机；
-    # -Quick:$Quick 经 -File 传参 bool 字符串化也炸。数组 splat 中 "-Quick" 会被当参数名，是唯一可靠传法。
-    $xargs = @(); if ($Quick) { $xargs += "-Quick" }
-    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxprobe.ps1" -Pid2 $Pid2 @xargs 2>&1
-    $state = "ERR"
-    foreach ($line in $out) { if ($line -match '^STATE=(\w+)') { $state = $Matches[1] } }
-    return $state
-}
+# 原 Invoke-Probe（子进程调 wxprobe.ps1 的字符串版）于 P5b 删除——改薄后已无调用者。
+# 探针统一走 _wxcore.Invoke-WxProbe（同进程）与 Invoke-WxProbeHeal（带自愈）。
+# ⚠ P5a 实测结论（重要，别按旧估计做规划）：
+#   单次 wxprobe 子进程实际约 **1.2s**（早先估的 0.3-0.5s 明显偏低）——因为每次都要
+#   dot-source _wxcommon（含 Add-Type 编译）+ 抓图 + 全区扫描。
+#   ⇒ 段1 名义上「1s 轮询」，实际每轮约 2.2s；切同进程后降到约 1.2s，等结算页近乎提速一倍。
+#   ⇒ 冒烟（两次探针）从 5.2s 降到 2.7s。
 function Invoke-ProbeHeal {
     param([switch]$Quick)
-    # 2026-11-01 定版（用户口径，D1 批准）：**不再自动 wxresize**。
-    #   理由：几何层 Get-DesignBitmap 已把任意尺寸归一化到设计基准，只要客户区宽 >=800 任何窗口都能用；
-    #         wxresize 只能救「宽<800」这一种，而那恰是用户主动缩小的结果——自动拉回属越权，
-    #         且每次多付 1.3s+（子进程启动 + 800ms 硬等 + resize 动作）。
-    #   ERR 后只原地重探一次，覆盖前台抖动 / 子进程偶发异常；仍 ERR 交调用方停机，不掩盖真故障。
-    $st = Invoke-Probe -Quick:$Quick
-    if ($st -eq "ERR") {
-        # ⚠ 必须 Write-Host：裸字符串会被 $st = Invoke-ProbeHeal 吸收进返回值，污染状态值
-        #   （2026-11-01 冒烟实测：原写法导致 HEAL 提示不输出，且 $st 变成数组）
-        Write-Host "HEAL: probe ERR -> reprobe once (no resize)"
-        Start-Sleep -Milliseconds 1000
-        $st = Invoke-Probe -Quick:$Quick
-        if ($st -eq "ERR") { Write-Host "HEAL: reprobe still ERR -> give up (交调用方停机)" }
-    }
-    return $st
+    # 2026-11-01 P5b：自愈逻辑已固化到 _wxcore.Invoke-WxProbeHeal（返回对象，D1 口径：不 wxresize）。
+    #   这里只做「对象 → 状态字符串」适配，供段2/段3/final 等仍按字符串比较的调用点使用。
+    #   保持字符串接口是为了不动那些调用点，减少一次改动的波及面。
+    $r = Invoke-WxProbeHeal -Pid2 $Pid2 -Quick:$Quick
+    if ($r.Err) { return "ERR" }
+    return $r.State
 }
 # ---- 轮盘保活 poke（2026-11-01 用户定版：**已废止**）----
 # 原 Invoke-Poke / Invoke-PokeIfDue（115s 节流，后改 240s）全部删除。废止依据（用户原话归纳）：
@@ -80,42 +68,20 @@ function Invoke-Click([string]$steps) {
 #   ③ 去掉一次 Invoke-ProbeHeal 无用调用（原代码取了 $after 却从未使用）。
 for ($i = 1; $i -le $Rounds; $i++) {
     "=== round $i/$Rounds ==="
-    # 1) 等结算页（Quick 轻量探针 1s 轮询；GOLD 需连续 3 次确认——战斗结束金色爆闪瞬时误报）
-    $t = 0; $st = Invoke-ProbeHeal -Quick; $goldStreak = 0; $unkStreak = 0
-    while ($st -ne "SETTLE_PAGE") {
-        if ($st -eq "ERR") { "STOP: probe error (wxprobe failed - 窗口丢失或尺寸不符，见 wxprobe 输出)"; exit 9 }
-        if ($st -eq "GOLD_DIALOG") {
-            $goldStreak++
-            if ($goldStreak -ge 3) {
-                # 2026-11-01 P3：单源守卫。VerifyLogin 判「点完是否已被踢到登录页」（本链必需）。
-                $g = Invoke-WxGoldGuard -Pid2 $Pid2 -VerifyLogin
-                if ($g.Verdict -eq "OK") {
-                    $goldStreak = 0; $t += 3
-                    # 不 continue：落回循环底部重探（dismiss 后画面已变，$st 需刷新）
-                } elseif ($g.Verdict -eq "LOGIN") { "STOP: kicked to login page (exit 7)"; exit 7 }
-                elseif ($g.Verdict -eq "NONE") { $goldStreak = 0; $t += 1
-                    # 事件20：probe 假金（装饰提示框），wxpopup 证实无真弹窗 → 继续等，不停机
-                }
-                else { "STOP: persistent gold dialog (death/idle/login), cls=$($g.Cls)"; exit 6 }
-            }
-            Start-Sleep -Seconds 1; $t += 1
-        } elseif ($st -eq "STAMINA_POP") { "STOP: stamina popup"; exit 5 }
-        else {
-            $goldStreak = 0
-            if ($st -eq "UNKNOWN") {
-                $unkStreak++
-                if ($unkStreak -ge 10) {
-                    # Quick 模式认不出登录页——UNKNOWN 持续 ~40s 时全量探针验踢线（战斗中误触发仅多花一次全探）
-                    $full = Invoke-ProbeHeal
-                    if ($full -eq "LOGIN_PAGE") { "STOP: kicked to login page (exit 7)"; exit 7 }
-                    $unkStreak = 0
-                }
-            } else { $unkStreak = 0 }
-            Start-Sleep -Seconds 1; $t += 1
-        }
-        if ($t -ge $SettleWaitSec) { "STOP: settle wait timeout ($SettleWaitSec s), last=$st"; exit 2 }
-        $st = Invoke-ProbeHeal -Quick
+    # 1) 等结算页（2026-11-01 P5b：内联 while → _wxflow.Wait-WxState 状态机）
+    #    原手工 while + goldStreak/unkStreak 两个计数器 + 四处 exit 已下沉；
+    #    GOLD 三连确认、UNKNOWN 十连全探、体力弹窗、超时的判据与计数行为逐行照搬，零漂移。
+    $w = Wait-WxState -Pid2 $Pid2 -Target "SETTLE_PAGE" -TimeoutSec $SettleWaitSec -GoldGuard -VerifyLogin
+    switch ($w.Result) {
+        "OK"      { }
+        "TIMEOUT" { "STOP: settle wait timeout ($SettleWaitSec s), last=$($w.State)"; exit 2 }
+        "ERR"     { "STOP: probe error (wxprobe failed - 窗口丢失或尺寸不符，见 wxprobe 输出)"; exit 9 }
+        "LOGIN"   { "STOP: kicked to login page (exit 7)"; exit 7 }
+        "GOLD"    { "STOP: persistent gold dialog (death/idle/login), $($w.Detail)"; exit 6 }
+        "STAMINA" { "STOP: stamina popup"; exit 5 }
+        default   { "STOP: unexpected wait result=$($w.Result)"; exit 9 }
     }
+    $st = $w.State
     # 2) 点再来一次
     #    D2/D3（2026-11-01 用户定版）：点击后只等 800ms 让点击生效，就绪判定全交给紧随其后的
     #      EnterWaitSec 轮询；若要多试一次，第二次也**不重复硬等**——第一次失败说明点击没生效，不是等得不够。

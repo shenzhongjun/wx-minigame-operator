@@ -573,3 +573,20 @@ function Resolve-WxRetryCoords {
         if ($bmp) { $bmp.Dispose() }
     }
 }
+
+# ================= 探针自愈（P5b，2026-11-01 从 wxgrind 私有实现固化）=================
+# 原 wxgrind.Invoke-ProbeHeal。口径见 2026-11-01 用户定版（D1）：
+#   **不自动 wxresize** —— 几何层已把任意尺寸归一化到设计基准，只要客户区宽 >=800 任何窗口都能用；
+#   wxresize 只能救「宽<800」一种，而那恰是用户主动缩小的结果，自动拉回属越权且每次多付 1.3s+。
+# ERR 后只原地重探一次，覆盖前台抖动/偶发异常；仍 ERR 则原样返回交调用方停机。
+function Invoke-WxProbeHeal {
+    param([int]$Pid2 = 0, [switch]$Quick)
+    $r = Invoke-WxProbe -Pid2 $Pid2 -Quick:$Quick
+    if (-not $r.Err) { return $r }
+    # ⚠ 提示一律 Write-Host：裸字符串会被 $x = Func 吸收进返回值（2026-11-01 冒烟实证）
+    Write-Host "HEAL: probe ERR -> reprobe once (no resize)"
+    Start-Sleep -Milliseconds 1000
+    $r = Invoke-WxProbe -Pid2 $Pid2 -Quick:$Quick
+    if ($r.Err) { Write-Host "HEAL: reprobe still ERR -> give up (交调用方停机)" }
+    return $r
+}
