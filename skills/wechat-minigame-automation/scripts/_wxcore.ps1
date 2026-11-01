@@ -154,10 +154,8 @@ function Invoke-WxProbe {
     $townVotes = ($nPower -ge 150) + ($nTownW -ge 50) + ($nShop -ge 30)
 
     # 左上角按钮文字模板匹配（AUTO_ON/AUTO_OFF 判定唯一来源）
-    # ⚠ 原名 $btnMatch（"按钮匹配上了"）——2026-11-01 用户指出这名字不伦不类：没说哪个按钮、
-    #   也没说匹配上代表什么。改名 $战斗按钮可见：**这个按钮只在战斗/副本界面出现**，
-    #   主城/世界地图/选角页都没有，所以它实际约等于「当前是不是战斗类画面」。
-    #   纯函数内局部变量，不进返回对象、无外部消费，改名零影响。
+    # $战斗按钮可见 = 该按钮只在战斗/副本界面出现，主城/世界地图/选角页都没有，
+    #   所以它约等于「当前是不是战斗类画面」。纯函数内局部变量，不进返回对象、无外部消费。
     $tpl = Import-WxBtnTemplates
     $live = Get-WxBmpMask $bmp $WX_BTN_X0 $WX_BTN_Y0
     $dOn = [math]::Round((Get-WxJaccard $live $tpl.On), 3)
