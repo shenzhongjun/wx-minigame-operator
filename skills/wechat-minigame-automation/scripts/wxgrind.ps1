@@ -76,6 +76,12 @@ function Invoke-EnsureAuto {
 #   顶号/扩展券/未知                        → Verdict="STOP"  红线停机
 # 差异（均为纯收益）：① 同进程调用省 1.3s/次进程启动；② OCR 引擎复用 3s→0.25s；
 #   ③ 去掉一次 Invoke-ProbeHeal 无用调用（原代码取了 $after 却从未使用）。
+# 复活配额（2026-11-01 修正）：**整个运行共享**，不是每轮重置。
+#   初版把 $reviveLeft 写在 for 循环体内 → 每轮各 2 次 → 连刷 10 轮最坏能烧 20 根羽毛，
+#   与用户「封顶 2 次」的口径相反。现提到循环外：一次 wxgrind 运行总共最多复活 ReviveMax 次，
+#   用完则后续每轮遇复活弹窗一律红线 STOP（exit 6 交人工）。
+$reviveLeft = 0
+if ($Revive) { $reviveLeft = $ReviveMax }
 for ($i = 1; $i -le $Rounds; $i++) {
     "=== round $i/$Rounds ==="
     # 1) 等结算页（2026-11-01 P5b：内联 while → _wxflow.Wait-WxState 状态机）
@@ -84,10 +90,9 @@ for ($i = 1; $i -le $Rounds; $i++) {
     $w = $null
     # 复活重入（2026-11-01 第二层，用户定版）：状态机遇 `POPUP_REVIVE` 且授权时会点「立即复活」并返回 REVIVED。
     #   复活后画面回到战斗，但**自动战斗是关着的**——不重开就是接着站桩连环死，把羽毛烧光。故此时必须
-    #   ensure auto 后重新等待。封顶 `-ReviveMax`（默认 2）：用完则不再授权，该轮遇复活弹窗直接红线 STOP。
+    #   ensure auto 后重新等待。封顶 `-ReviveMax`（默认 2）：**整个运行共享配额**（见循环外初始化），
+    #   用完则不再授权，遇复活弹窗直接红线 STOP。
     #   ⚠ 复活是消耗资源（羽毛，每天免费领 1 个）的不可逆动作，默认开着，`-Revive $false` 可关。
-    $reviveLeft = 0
-    if ($Revive) { $reviveLeft = $ReviveMax }
     while ($true) {
         $w = Wait-WxState -Pid2 $Pid2 -Target "SETTLE_PAGE" -TimeoutSec $SettleWaitSec -GoldGuard -VerifyLogin -AllowRevive:($reviveLeft -gt 0)
         if ($w.Result -ne "REVIVED") { break }
