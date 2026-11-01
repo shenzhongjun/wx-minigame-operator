@@ -21,52 +21,16 @@ $scripts = $PSScriptRoot
 #   失败 exit 2 交编排层按 §七 重试（重试权归编排层，避免内部×外部次数相乘误触）。
 # -AutoRetry（2026-10-25 新增）：每轮点击前自动扫描结算暗红按钮位置（复用 wxfarm 扫描带算法），
 #   替代人工按副本/布局传 RetryX/Y；扫描失败回退固定坐标。扫描带 BX=915±38, y225-445（设计坐标）。
-$script:AutoRetryReady = $false
 if ($AutoRetry) {
+    # 预检：提前暴露窗口丢失/尺寸异常（扫描逻辑本身已固化进 _wxcore，不再需要本地状态）
     $script:grindHwnd = Find-GameWindow -Pid2 $Pid2
     if ($script:grindHwnd -eq [IntPtr]::Zero) { "ERR: window not found (pid=$Pid2)"; exit 1 }
-    $null = Get-ClientGeometry $script:grindHwnd   # 提前暴露尺寸/比例异常
-    $script:AutoRetryReady = $true
+    $null = Get-ClientGeometry $script:grindHwnd
 }
-function Find-RetryY {
-    if (-not $script:AutoRetryReady) { return -1 }
-    $bx = 915; $y0 = 225; $scanH = 220
-    # 归一化整图后扫描：设计坐标常量零改动，客户区微变由 Get-DesignBitmap 吸收
-    $g = Get-ClientGeometry $script:grindHwnd
-    $bmp = Get-DesignBitmap $g
-    $hits = New-Object bool[] $scanH
-    for ($i = 0; $i -lt $scanH; $i++) {
-        $n = 0
-        foreach ($dx in @(-25, 0, 25)) {
-            $c = $bmp.GetPixel($bx + $dx, $y0 + $i)
-            if ($c.R -gt 100 -and ($c.R - $c.B) -gt 50 -and $c.G -gt 22 -and $c.G -lt 78) { $n++ }
-        }
-        $hits[$i] = ($n -ge 2)
-    }
-    $bmp.Dispose()
-    $i = 0
-    while ($i -lt $scanH) {
-        if (-not $hits[$i]) { $i++; continue }
-        $s = $i; $e = $i; $gap = 0
-        $j = $i + 1
-        while ($j -lt $scanH) {
-            if ($hits[$j]) { $e = $j; $gap = 0 }
-            else { $gap++; if ($gap -gt 6) { break } }
-            $j++
-        }
-        if (($e - $s + 1) -ge 10) { return ($y0 + $s + 20) }
-        $i = $e + 1
-    }
-    return -1
-}
-function Resolve-RetryCoords {
-    if ($script:AutoRetryReady) {
-        $fy = Find-RetryY
-        if ($fy -ge 0) { return "915,$fy(auto)" }
-        Write-Host "retry autoscan failed, fallback fixed ($RetryX,$RetryY)"
-    }
-    return "$RetryX,$RetryY"
-}
+# ---- 结算按钮扫描（2026-11-01 P4 固化入 _wxcore）----
+# 原 Find-RetryY / Resolve-RetryCoords（本文件私有，依赖 $script:grindHwnd）已删除。
+# 现用 _wxcore.Find-WxRetryY（纯算法）/ Resolve-WxRetryCoords（取图+回退，支持 -Img 离线验图）。
+# 判据、扫描带（BX=915±25 / y225-444 / 连续段>=10px）、回退逻辑全部逐字照搬，零漂移。
 function Invoke-Probe {
     param([switch]$Quick)
     # 2026-10-26 修复：原 @q 字符串展开把 "-Quick"/"" 绑定到 wxprobe 首位置参数 [int]$Pid2 → 绑定错误秒退 → ERR 停机；
@@ -161,10 +125,11 @@ for ($i = 1; $i -le $Rounds; $i++) {
     #    注意：用 for 而非 foreach (1..$RetryAttempts)——PS 的 1..0 会展开成 (1,0) 两元素，
     #    传 0 反而点两次。for 在 <=0 时天然不循环，直接落到 exit 2。
     for ($attempt = 1; $attempt -le $RetryAttempts; $attempt++) {
-        $rc = Resolve-RetryCoords
-        "round ${i}: click retry (attempt $attempt/$RetryAttempts, target=$rc)"
-        $rcParts = $rc.Split(',')
-        Invoke-Click "$($rcParts[0]):$($rcParts[1]):800" | Out-Null
+        $rc = Resolve-WxRetryCoords -Pid2 $Pid2 -EnableScan:$AutoRetry -FallbackX $RetryX -FallbackY $RetryY
+        if ($rc.Err) { Write-Host "retry scan: $($rc.Err)" }
+        if (-not $rc.Auto -and $AutoRetry) { Write-Host "retry autoscan failed, fallback fixed ($($rc.X),$($rc.Y))" }
+        "round ${i}: click retry (attempt $attempt/$RetryAttempts, target=$($rc.X),$($rc.Y)$(if ($rc.Auto) { ' (auto)' } else { '' }))"
+        Invoke-Click "$($rc.X):$($rc.Y):800" | Out-Null
         $t = 0; $st = Invoke-ProbeHeal
         while ($st -eq "SETTLE_PAGE" -and $t -lt $EnterWaitSec) {
             Start-Sleep -Seconds 1; $t += 1; $st = Invoke-ProbeHeal

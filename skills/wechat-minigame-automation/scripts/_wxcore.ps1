@@ -499,3 +499,77 @@ function Invoke-WxClick {
     [void]$log.Add("DONE")
     return (New-WxClickResult -ExitCode 0 -Log $log.ToArray())
 }
+
+# ================= 结算「再来一次」按钮扫描（P4，2026-11-01 从 wxgrind 私有实现固化）=================
+# 原 wxgrind.Find-RetryY / Resolve-RetryCoords（私有，依赖 $script:grindHwnd）。
+# 拆两层：Find-WxRetryY 纯算法（不碰窗口、不管资源），Resolve-WxRetryCoords 负责取图+回退。
+# 判据与常量**零改动**：扫描带 BX=915（三点采样 ±25），y 225..444，连续段 >=10px。
+# 新增 -Img 支持：可对历史截图离线验扫描结果，不必实机。
+
+function Find-WxRetryY {
+    # IN : Bitmap，须已归一化到设计尺寸 1138x708（调用方负责 Dispose，本函数不释放）
+    # OUT: 暗红按钮中心 y（设计坐标）；未找到返回 -1
+    param([System.Drawing.Bitmap]$Bitmap)
+    $bx = 915; $y0 = 225; $scanH = 220
+    $hits = New-Object bool[] $scanH
+    for ($i = 0; $i -lt $scanH; $i++) {
+        $n = 0
+        foreach ($dx in @(-25, 0, 25)) {
+            $c = $Bitmap.GetPixel($bx + $dx, $y0 + $i)
+            if ($c.R -gt 100 -and ($c.R - $c.B) -gt 50 -and $c.G -gt 22 -and $c.G -lt 78) { $n++ }
+        }
+        $hits[$i] = ($n -ge 2)
+    }
+    # 找连续命中段：允许 <=6px 断裂，段长 >=10px 才算按钮（过滤细小杂色）
+    $i = 0
+    while ($i -lt $scanH) {
+        if (-not $hits[$i]) { $i++; continue }
+        $s = $i; $e = $i; $gap = 0
+        $j = $i + 1
+        while ($j -lt $scanH) {
+            if ($hits[$j]) { $e = $j; $gap = 0 }
+            else { $gap++; if ($gap -gt 6) { break } }
+            $j++
+        }
+        if (($e - $s + 1) -ge 10) { return ($y0 + $s + 20) }
+        $i = $e + 1
+    }
+    return -1
+}
+
+function New-WxRetryCoordResult {
+    param([int]$X = 936, [int]$Y = 269, [bool]$Auto = $false, [string]$Err = "")
+    [pscustomobject]@{ X = $X; Y = $Y; Auto = $Auto; Err = $Err }
+}
+
+function Resolve-WxRetryCoords {
+    # IN : -Img 离线图（隐含扫描）；或 -Pid2 + -EnableScan 实时抓图扫描
+    # OUT: @{ X; Y; Auto }  —— Auto=$true 表示坐标来自自动扫描，否则是固定回退值
+    # 注：不传 -EnableScan 且无 -Img 时直接返回固定坐标，不起抓图（保持原 wxgrind 默认行为，零漂移）
+    param([int]$Pid2 = 0, [string]$Img = "", [switch]$EnableScan,
+          [int]$FallbackX = 936, [int]$FallbackY = 269)
+    if (-not $EnableScan -and $Img -eq "") { return (New-WxRetryCoordResult -X $FallbackX -Y $FallbackY) }
+    $bmp = $null
+    try {
+        if ($Img -ne "") {
+            if (-not (Test-Path $Img)) { return (New-WxRetryCoordResult -X $FallbackX -Y $FallbackY -Err "image not found: $Img") }
+            $src = New-Object System.Drawing.Bitmap $Img
+            if ($src.Width -ne $WX_DESIGN_W -or $src.Height -ne $WX_DESIGN_H) {
+                $bmp = Resize-WxBitmapNearest $src $WX_DESIGN_W $WX_DESIGN_H
+                if (-not [object]::ReferenceEquals($bmp, $src)) { $src.Dispose() }
+            } else { $bmp = $src }
+        } else {
+            $h = Find-GameWindow -Pid2 $Pid2
+            if ($h -eq [IntPtr]::Zero) { return (New-WxRetryCoordResult -X $FallbackX -Y $FallbackY -Err "window not found (pid=$Pid2)") }
+            $geo = Get-ClientGeometry $h
+            $bmp = Get-DesignBitmap $geo
+        }
+        $fy = Find-WxRetryY -Bitmap $bmp
+        if ($fy -ge 0) { return (New-WxRetryCoordResult -X 915 -Y $fy -Auto $true) }
+        return (New-WxRetryCoordResult -X $FallbackX -Y $FallbackY)
+    } catch {
+        return (New-WxRetryCoordResult -X $FallbackX -Y $FallbackY -Err "$_")
+    } finally {
+        if ($bmp) { $bmp.Dispose() }
+    }
+}
