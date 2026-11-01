@@ -91,13 +91,22 @@ function Wait-WxState {
         [switch]$NoSleep,            # 测试用：跳过 sleep
         [scriptblock]$Probe = $null  # 测试用：注入探针（签名 { param($quick) -> 状态字符串 }）
     )
+    # ⚠ 严禁在此处加 .GetNewClosure()（事件23，2026-11-01，v1.1.22 实战炸链）：
+    #   GetNewClosure 会把脚本块绑定到一个新的动态模块，命令解析会话状态随之更换，
+    #   **看不见调用方「脚本作用域」里 dot-source 进来的函数**——只有全局注册的函数它才认。
+    #   表现为 Invoke-WxProbeHeal : 无法识别 → $r 恒空 → $st 永远不等于目标态 → 空转到超时。
+    #   实测对照：withClosure=MISSING / withoutClosure=FOUND（同一脚本作用域内同函数）。
+    #   注意可见性分界：交互式 -Command 运行时 dot-source 落全局作用域，加了闭包也正常，
+    #   只有 wxgrind 这种 -File 跑（脚本作用域）才暴露——所以此 bug 在交互式排查时看不见。
+    # 约束：本脚本块**只允许在 Wait-WxState 栈内用 & 调用**（下三处），
+    #   不加闭包时 $Probe / $Pid2 靠作用域链动态解析照常可见；一旦传出函数体外使用，变量会失解析。
     $probeCall = {
         param($q)
         if ($Probe) { return (& $Probe $q) }
         $r = Invoke-WxProbeHeal -Pid2 $Pid2 -Quick:$q
         if ($r.Err) { return "ERR" }
         return $r.State
-    }.GetNewClosure()
+    }
 
     $t = 0; $goldStreak = 0; $unkStreak = 0; $staminaStreak = 0
     $st = & $probeCall $true
