@@ -9,24 +9,31 @@
 # 来源：wxgrind.Invoke-PopupGuard 与 wxrelogin 阶段1/阶段4 三处内联值，实测一致。
 $WX_GOLD_CONFIRM_X = 700
 $WX_GOLD_CONFIRM_Y = 513
+# ---- 复活弹窗「立即复活」按钮（2026-11-01 实机核对）----
+# 与挂机弹窗「确定」同位（同一面板槽位）；v1.1.22 起 coords.md 记的就是 (700,513)，
+# 旧值 (722,516) 已作废。实机该弹窗 goldbtn=1277、正文「确定复活吗？」。
+$WX_REVIVE_X = 700
+$WX_REVIVE_Y = 513
 
 function New-WxGuardResult {
-    param([string]$Verdict = "STOP", [string]$Cls = "POPUP_UNKNOWN", [bool]$Dismissed = $false)
-    [pscustomobject]@{ Verdict = $Verdict; Cls = $Cls; Dismissed = $Dismissed }
+    param([string]$Verdict = "STOP", [string]$Cls = "POPUP_UNKNOWN", [bool]$Dismissed = $false, [bool]$Revived = $false)
+    [pscustomobject]@{ Verdict = $Verdict; Cls = $Cls; Dismissed = $Dismissed; Revived = $Revived }
 }
 
 # 金弹窗处置（单源）
 # IN : 调用方已探到 State=GOLD_DIALOG。**本函数不自己首判探针**，首判由调用方给，避免重复探。
-# OUT: Verdict = OK    已消弹窗（或授权点击），可继续
-#              = NONE  probe 假金（金边装饰框欺骗，事件20），不停机不点击，调用方继续等
-#              = LOGIN 点击后复验为登录页 → 会话已被踢，调用方 exit 7 交操作员重登
-#              = STOP  红线（顶号/涉钱/扩展券/未知/分类失败），调用方按红线停机
+# OUT: Verdict = OK     已消弹窗（或授权点击），可继续
+#              = NONE   probe 假金（金边装饰框欺骗，事件20），不停机不点击，调用方继续等
+#              = REVIVE 已点「立即复活」（仅 -AllowRevive 时出现），调用方**必须重开自动战斗**再继续
+#              = LOGIN  点击后复验为登录页 → 会话已被踢，调用方 exit 7 交操作员重登
+#              = STOP   红线（顶号/涉钱/扩展券/未知/分类失败/未授权的复活），调用方按红线停机
 function Invoke-WxGoldGuard {
     param(
         [int]$Pid2 = 0,
         [string]$Cls = "",      # 调用方已探到的分类。非空则跳过 Invoke-WxPopup，避免重复探（约 0.3s）
         [switch]$AssumeGold,    # 顶号弹窗：用户授权后对非 IDLE 分类也放行点击（wxrelogin 阶段1 语义）
         [switch]$VerifyLogin,   # 点完复验是否被踢登录页（wxgrind 需要；wxrelogin 靠后续阶段判，不用）
+        [switch]$AllowRevive,   # 允许点「立即复活」。**由调用方按次数封顶决定**，本函数不计数
         [int]$SettleMs = 2000   # 复验前等待（保留 wxgrind 原 2s，零漂移）
     )
     $cls = $Cls
@@ -42,6 +49,16 @@ function Invoke-WxGoldGuard {
 
     # 假金：probe 被金边装饰提示框欺骗（事件20）→ 继续等待，不停机不点击
     if ($cls -eq "POPUP_NONE") { return (New-WxGuardResult -Verdict "NONE" -Cls $cls) }
+
+    # 复活弹窗（2026-11-01 第二层）：只在调用方显式授权时点「立即复活」。
+    #   为什么单独一个分支而不并进 IDLE：复活**消耗资源**（羽毛，每天免费领 1 个），属不可逆动作，
+    #   必须由调用方按次数封顶（用户定版：封顶 2 次）+ 开关控制，本函数不做次数判断。
+    #   点完返回 REVIVE 而非 OK：调用方拿到后**必须重开自动战斗**，否则角色继续站桩连环死。
+    if ($cls -eq "POPUP_REVIVE") {
+        if (-not $AllowRevive) { return (New-WxGuardResult -Verdict "STOP" -Cls $cls) }
+        $null = Invoke-WxClick -Steps "$($WX_REVIVE_X):$($WX_REVIVE_Y):1200" -Pid2 $Pid2
+        return (New-WxGuardResult -Verdict "REVIVE" -Cls $cls -Dismissed $true -Revived $true)
+    }
 
     # 只有挂机弹窗 POPUP_IDLE 才自动点「确定」；其余一律红线，除非用户显式授权 AssumeGold
     if ($cls -ne "POPUP_IDLE" -and -not $AssumeGold) {
@@ -73,6 +90,8 @@ function Invoke-WxGoldGuard {
 #   LOGIN   被踢回登录页（需重登）
 #   GOLD    金弹窗未消/红线（STOP）
 #   STAMINA 体力弹窗（STOP）
+#   REVIVED 已点「立即复活」（仅 -AllowRevive）。**调用方必须重开自动战斗后重新等待**，
+#           本层不负责重开——autoensure 是独立脚本，策略层不跨进程调它（保分层，也免注入盲区）。
 function New-WxWaitResult {
     param([string]$Result = "OK", [string]$State = "", [string]$Detail = "")
     [pscustomobject]@{ Result = $Result; State = $State; Detail = $Detail }
@@ -89,6 +108,7 @@ function Wait-WxState {
         [int]$StaminaConfirmN = 3,   # 体力弹窗连击确认次数（战斗中绿色特效瞬时误报，2026-11-01 实机撞上）
         [int]$UnknownDeepN = 10,     # UNKNOWN 连续多少次后做一次全量探针验踢线
         [switch]$NoSleep,            # 测试用：跳过 sleep
+        [switch]$AllowRevive,        # 允许守卫点「立即复活」（次数封顶由调用方管）
         [scriptblock]$Probe = $null  # 测试用：注入探针（签名 { param($quick) -> 状态字符串 }）
     )
     # ⚠ 严禁在此处加 .GetNewClosure()（事件23，2026-11-01，v1.1.22 实战炸链）：
@@ -118,9 +138,10 @@ function Wait-WxState {
             $goldStreak++
             if ($goldStreak -ge $GoldConfirmN) {
                 if (-not $GoldGuard) { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "gold dialog, guard disabled") }
-                $g = Invoke-WxGoldGuard -Pid2 $Pid2 -VerifyLogin:$VerifyLogin
+                $g = Invoke-WxGoldGuard -Pid2 $Pid2 -VerifyLogin:$VerifyLogin -AllowRevive:$AllowRevive
                 if ($g.Verdict -eq "OK") { $goldStreak = 0; $t += 3 }
                 elseif ($g.Verdict -eq "LOGIN") { return (New-WxWaitResult -Result "LOGIN" -State $st -Detail "cls=$($g.Cls)") }
+                elseif ($g.Verdict -eq "REVIVE") { return (New-WxWaitResult -Result "REVIVED" -State $st -Detail "cls=$($g.Cls)") }
                 elseif ($g.Verdict -eq "NONE") { $goldStreak = 0; $t += 1 }
                 else { return (New-WxWaitResult -Result "GOLD" -State $st -Detail "cls=$($g.Cls)") }
             }

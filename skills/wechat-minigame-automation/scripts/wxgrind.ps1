@@ -1,4 +1,4 @@
-﻿param([int]$Rounds = 1, [int]$Pid2 = 0, [int]$RetryX = 936, [int]$RetryY = 269, [int]$SettleWaitSec = 90, [int]$EnterWaitSec = 25, [int]$RetryAttempts = 1, [switch]$AutoRetry)
+﻿param([int]$Rounds = 1, [int]$Pid2 = 0, [int]$RetryX = 936, [int]$RetryY = 269, [int]$SettleWaitSec = 90, [int]$EnterWaitSec = 25, [int]$RetryAttempts = 1, [switch]$AutoRetry, [bool]$Revive = $true, [int]$ReviveMax = 2)
 # 固化刷本循环（2026-10-24 新增，替代 wxfarm 的通用扫描方案，语法0错误未实战）
 # 思路：不再扫描按钮位置——结算「再来一次」用固定坐标（圣殿两行布局实测 (936,269)），
 #       每步用 wxprobe 验证状态，异常即停。依赖 wxprobe/wxclick 同目录。
@@ -9,6 +9,9 @@
 #   7=被踢回登录页(交操作员重登) 9=探针故障
 #   ⚠ 2026-11-01 修正：原「两次点击未进图」错报 exit 0（老口径 0=完成/重试失败），
 #     会导致编排层把失败当成功继续跑下一轮，已改 exit 2。
+# 复活（2026-11-01 第二层，用户定版）：-Revive **默认开**，-ReviveMax 默认 2。段1 遇 POPUP_REVIVE 自动点
+#   「立即复活」→ 重开自动战斗 → 继续等；次数用尽则该轮按红线 exit 6 交人工。`-Revive $false` 完全关闭。
+#   理由：复活消耗羽毛（每天免费领 1 个），属不可逆动作，故必须封顶 + 可关。
 $scripts = $PSScriptRoot
 # 模块化 P3（2026-11-01）：引入策略层，金弹窗处置单源。
 #   原 wxgrind.Invoke-PopupGuard 与 wxrelogin 阶段1/阶段4 三处各写一份，现收敛为 _wxflow.Invoke-WxGoldGuard。
@@ -58,6 +61,13 @@ function Invoke-ProbeHeal {
 function Invoke-Click([string]$steps) {
     & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxclick.ps1" -Pid2 $Pid2 -Steps $steps 2>&1 | ForEach-Object { "$_" }
 }
+# 自动战斗确保（v1.1.12 起唯一入口=wxautoensure）。段3 入场与段1 复活后共用一处。
+# 返回 $true=已确保 ON。
+function Invoke-EnsureAuto {
+    $out = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxautoensure.ps1" -Pid2 $Pid2 -TimeoutSec 30 2>&1
+    $out | ForEach-Object { "$_" }
+    return (($out -join "`n") -match 'AUTO_ENSURED')
+}
 # ---- 金弹窗处置（2026-11-01 P3 单源化）----
 # 原 Invoke-PopupGuard（本文件私有，70 行）已删除，改用 _wxflow.Invoke-WxGoldGuard。
 # 迁移对照（行为零改动）：
@@ -71,7 +81,20 @@ for ($i = 1; $i -le $Rounds; $i++) {
     # 1) 等结算页（2026-11-01 P5b：内联 while → _wxflow.Wait-WxState 状态机）
     #    原手工 while + goldStreak/unkStreak 两个计数器 + 四处 exit 已下沉；
     #    GOLD 三连确认、UNKNOWN 十连全探、体力弹窗、超时的判据与计数行为逐行照搬，零漂移。
-    $w = Wait-WxState -Pid2 $Pid2 -Target "SETTLE_PAGE" -TimeoutSec $SettleWaitSec -GoldGuard -VerifyLogin
+    $w = $null
+    # 复活重入（2026-11-01 第二层，用户定版）：状态机遇 `POPUP_REVIVE` 且授权时会点「立即复活」并返回 REVIVED。
+    #   复活后画面回到战斗，但**自动战斗是关着的**——不重开就是接着站桩连环死，把羽毛烧光。故此时必须
+    #   ensure auto 后重新等待。封顶 `-ReviveMax`（默认 2）：用完则不再授权，该轮遇复活弹窗直接红线 STOP。
+    #   ⚠ 复活是消耗资源（羽毛，每天免费领 1 个）的不可逆动作，默认开着，`-Revive $false` 可关。
+    $reviveLeft = 0
+    if ($Revive) { $reviveLeft = $ReviveMax }
+    while ($true) {
+        $w = Wait-WxState -Pid2 $Pid2 -Target "SETTLE_PAGE" -TimeoutSec $SettleWaitSec -GoldGuard -VerifyLogin -AllowRevive:($reviveLeft -gt 0)
+        if ($w.Result -ne "REVIVED") { break }
+        $reviveLeft--
+        "round ${i}: REVIVED (left=$reviveLeft) -> re-ensure auto"
+        if (-not (Invoke-EnsureAuto)) { "STOP: auto ensure failed after revive"; exit 3 }
+    }
     switch ($w.Result) {
         "OK"      { }
         "TIMEOUT" { "STOP: settle wait timeout ($SettleWaitSec s), last=$($w.State)"; exit 2 }
@@ -121,10 +144,9 @@ for ($i = 1; $i -le $Rounds; $i++) {
     # 3.5) 自动战斗确保（v1.1.12 起唯一入口=wxautoensure，OCR 单判据；旧模板 gated 路径退役——
     #      其布局常量/锚点已被 v1.1.10/11 两次变更甩下，wxprobe AUTO 态仅存诊断用途）。
     #      无条件每场必调：ON 优先判定（已开 ~1s 返回 0 点击），不再依赖 probe AUTO_OFF 触发。
+    #      2026-11-01：抽成 Invoke-EnsureAuto，与段1 复活后重开共用一处，避免两份逻辑漂移。
     "round ${i}: ensure auto (wxautoensure)"
-    $ens = & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$scripts\wxautoensure.ps1" -Pid2 $Pid2 -TimeoutSec 30 2>&1
-    $ens | ForEach-Object { "$_" }
-    if (($ens -join "`n") -notmatch 'AUTO_ENSURED') { "STOP: auto ensure failed"; exit 3 }
+    if (-not (Invoke-EnsureAuto)) { "STOP: auto ensure failed"; exit 3 }
     # 4) 等战斗结束（下一轮的等结算负责等待）
 }
 "LOOP: $Rounds rounds completed"
